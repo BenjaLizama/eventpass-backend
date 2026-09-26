@@ -1,0 +1,47 @@
+# Compilados de Java / Maven
+**/target/
+!**/src/main/**/target/
+!**/src/test/**/target/
+!.mvn/wrapper/maven-wrapper.jar
+
+# Gradle
+**/build/
+!**/src/main/**/build/
+!**/src/test/**/build/
+
+# Archivos de entorno y secretos local
+*.env
+.env
+
+# Archivos subidos o temporales
+/uploads/
+**/uploads/
+*.log
+
+# IDEs - IntelliJ IDEA
+.idea/
+*.iml
+**/*.iml
+
+# IDEs - Eclipse
+.apt_generated
+.classpath
+.factorypath
+.project
+.settings
+.springBeans
+.sts4-cache
+
+# IDEs - VS Code
+.vscode/
+
+# IDEs - NetBeans
+/nbproject/private/
+/nbbuild/
+/dist/
+/nbdist/
+/.nb-gradle/
+
+# Sistema Operativo
+.DS_Store
+Thumbs.db

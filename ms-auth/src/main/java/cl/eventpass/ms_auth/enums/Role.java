@@ -20,8 +20,6 @@ public enum Role {
     )),
 
     STAFF(Set.of(
-            Permission.EVENT_READ,
-            Permission.TICKET_READ,
             Permission.TICKET_VALIDATE
     )),
 

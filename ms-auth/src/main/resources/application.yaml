@@ -19,6 +19,10 @@ spring:
 
 application:
   security:
+    admin:
+      email: ${ADMIN_EMAIL:admin@eventpass.cl}
+      password: ${ADMIN_PASSWORD:Cambiame123!}
+
     jwt:
       secret-key: ${JWT_SECRET:404E635266556A586E3272357538782F413F4428472B4B6250655368566D5971}
       expiration: ${JWT_EXPIRATION:86400000} # 24 horas.

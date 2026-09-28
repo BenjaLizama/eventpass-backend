@@ -48,7 +48,7 @@ public class AuthService {
         CredentialEntity credential = authMapper.toEntity(request, encodedPassword);
         credentialRepository.save(credential);
 
-        return buildAuthResponse(credential);
+        return createAuthResponse(credential);
     }
 
     public AuthResponse login(LoginRequest request) {
@@ -57,7 +57,7 @@ public class AuthService {
         );
 
         UserDetails user = userDetailsService.loadUserByUsername(request.email());
-        return buildAuthResponse(user);
+        return createAuthResponse(user);
     }
 
     public AuthResponse refreshToken(RefreshTokenRequest request) {
@@ -129,7 +129,7 @@ public class AuthService {
         sessionService.revokeSession(sessionId);
     }
 
-    private AuthResponse buildAuthResponse(UserDetails user) {
+    public AuthResponse createAuthResponse(UserDetails user) {
 
         String sessionId = UUID.randomUUID().toString();
 

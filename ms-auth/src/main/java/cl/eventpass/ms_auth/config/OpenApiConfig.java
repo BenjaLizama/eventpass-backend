@@ -17,7 +17,11 @@ public class OpenApiConfig {
                 .info(new Info()
                         .title("EventPass Auth API")
                         .version("1.0.0")
-                        .description("API de autenticación y gestión de acceso de EventPass.")
+                        .description(
+                                "API de autenticación, autorización y gestión de usuarios de EventPass. " +
+                                "Proporciona registro e inicio de sesión, renovación y revocación de tokens JWT, " +
+                                "control de acceso basado en roles y permisos, y administración de usuarios internos."
+                        )
                         .contact(new Contact()
                                 .name("EventPass")
                         )

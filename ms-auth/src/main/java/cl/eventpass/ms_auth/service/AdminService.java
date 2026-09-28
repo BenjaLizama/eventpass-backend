@@ -11,6 +11,8 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.List;
+
 @Service
 @RequiredArgsConstructor
 public class AdminService {
@@ -36,6 +38,16 @@ public class AdminService {
     @Transactional
     public UserResponse createSupport(CreateUserRequest request) {
         return createUser(request, Role.SUPPORT);
+    }
+
+    public List<UserResponse> getAllUsers() {
+        return credentialRepository.findAll()
+                .stream()
+                .map(user -> new UserResponse(
+                        user.getEmail(),
+                        user.getRole(),
+                        user.isAccountNonLocked()
+                )).toList();
     }
 
     private UserResponse createUser(

@@ -10,10 +10,9 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
 
 @RestController
 @RequestMapping("/api/v1/admin")
@@ -21,6 +20,21 @@ import org.springframework.web.bind.annotation.RestController;
 public class AdminController implements AdminControllerDocs {
 
     private final AdminService adminService;
+
+    @GetMapping("/users")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<StandardResponse<List<UserResponse>>> getAllUsers() {
+        List<UserResponse> response = adminService.getAllUsers();
+
+        return ResponseEntity
+                .status(HttpStatus.OK)
+                .body(
+                        StandardResponse.ok(
+                                "Usuarios obtenidos con éxito.",
+                                response
+                        )
+                );
+    }
 
     @Override
     @PostMapping("/users/admin")

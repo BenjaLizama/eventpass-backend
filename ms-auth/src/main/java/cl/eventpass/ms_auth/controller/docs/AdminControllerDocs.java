@@ -13,6 +13,8 @@ import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.http.ResponseEntity;
 
+import java.util.List;
+
 @Tag(
         name = "Administration",
         description = "Endpoints administrativos para la gestión de usuarios internos del sistema."
@@ -226,4 +228,40 @@ public interface AdminControllerDocs {
     ResponseEntity<StandardResponse<UserResponse>> createSupport(
             CreateUserRequest request
     );
+
+    @Operation(
+            summary = "Obtener todos los usuarios",
+            description = "Obtiene el listado de todos los usuarios registrados en el sistema. "
+                    + "Este endpoint solamente puede ser utilizado por un usuario que posea el rol ADMIN."
+    )
+    @ApiResponses({
+            @ApiResponse(
+                    responseCode = "200",
+                    description = "Usuarios obtenidos exitosamente.",
+                    content = @Content(
+                            schema = @Schema(
+                                    implementation = UserResponse.class
+                            )
+                    )
+            ),
+            @ApiResponse(
+                    responseCode = "401",
+                    description = "No existe una autenticación válida.",
+                    content = @Content(
+                            schema = @Schema(
+                                    implementation = StandardErrorResponse.class
+                            )
+                    )
+            ),
+            @ApiResponse(
+                    responseCode = "403",
+                    description = "El usuario autenticado no posee permisos de administrador.",
+                    content = @Content(
+                            schema = @Schema(
+                                    implementation = StandardErrorResponse.class
+                            )
+                    )
+            )
+    })
+    ResponseEntity<StandardResponse<List<UserResponse>>> getAllUsers();
 }

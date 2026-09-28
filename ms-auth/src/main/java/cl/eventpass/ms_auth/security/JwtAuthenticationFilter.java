@@ -1,5 +1,6 @@
 package cl.eventpass.ms_auth.security;
 
+import cl.eventpass.ms_auth.service.JwtService;
 import io.jsonwebtoken.io.IOException;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;

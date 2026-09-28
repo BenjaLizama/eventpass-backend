@@ -1,4 +1,4 @@
-package cl.eventpass.ms_auth.security;
+package cl.eventpass.ms_auth.service;
 
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
@@ -31,6 +31,7 @@ public class JwtService {
     private long refreshExpiration;
 
     private final TokenBlacklistService tokenBlacklistService;
+    private final SessionService sessionService;
 
     public String extractUsername(String token) {
         return extractClaim(token, Claims::getSubject);
@@ -52,8 +53,10 @@ public class JwtService {
         return claimsResolver.apply(claims);
     }
 
-    public String generateToken(UserDetails userDetails) {
-
+    public String generateToken(
+            UserDetails userDetails,
+            String sessionId
+    ) {
         Map<String, Object> extraClaims = new HashMap<>();
 
         extraClaims.put(
@@ -64,11 +67,23 @@ public class JwtService {
                         .toList()
         );
 
+        extraClaims.put("sid", sessionId);
+
         return buildToken(extraClaims, userDetails, jwtExpiration);
     }
 
-    public String generateRefreshToken(UserDetails userDetails) {
-        return buildToken(new HashMap<>(), userDetails, refreshExpiration);
+    public String generateRefreshToken(
+            UserDetails userDetails,
+            String sessionId
+    ) {
+        Map<String, Object> extraClaims = new HashMap<>();
+        extraClaims.put("sid", sessionId);
+
+        return buildToken(
+                extraClaims,
+                userDetails,
+                refreshExpiration
+        );
     }
 
     private String buildToken(
@@ -92,10 +107,12 @@ public class JwtService {
     ) {
         final String username = extractUsername(token);
         final String jti = extractJti(token);
+        final String sessionId = extractSessionId(token);
 
         return username.equals(userDetails.getUsername())
                 && !isTokenExpired(token)
-                && !tokenBlacklistService.isBlacklisted(jti);
+                && !tokenBlacklistService.isBlacklisted(jti)
+                && sessionService.isSessionActive(sessionId);
     }
 
     public boolean isTokenExpired(String token) {
@@ -113,5 +130,9 @@ public class JwtService {
     private SecretKey getSignInKey() {
         byte[] keyBytes = Decoders.BASE64.decode(secretKey);
         return Keys.hmacShaKeyFor(keyBytes);
+    }
+
+    public String extractSessionId(String token) {
+        return extractClaim(token, claims -> claims.get("sid", String.class));
     }
 }

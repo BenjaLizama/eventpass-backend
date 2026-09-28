@@ -1,4 +1,4 @@
-package cl.eventpass.ms_auth.security;
+package cl.eventpass.ms_auth.service;
 
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.redis.core.StringRedisTemplate;

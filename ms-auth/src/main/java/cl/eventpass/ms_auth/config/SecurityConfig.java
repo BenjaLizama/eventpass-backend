@@ -1,6 +1,6 @@
 package cl.eventpass.ms_auth.config;
 
-import cl.eventpass.ms_auth.security.CustomUserDetailService;
+import cl.eventpass.ms_auth.service.CustomUserDetailService;
 import cl.eventpass.ms_auth.security.JwtAuthenticationFilter;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
@@ -36,7 +36,11 @@ public class SecurityConfig {
     };
 
     @Bean
-    public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+    public SecurityFilterChain securityFilterChain(
+            HttpSecurity http,
+            AuthenticationProvider authenticationProvider
+    ) throws Exception {
+
         http
                 .csrf(AbstractHttpConfigurer::disable)
                 .authorizeHttpRequests(req ->
@@ -46,7 +50,7 @@ public class SecurityConfig {
                 .sessionManagement(session ->
                         session.sessionCreationPolicy(SessionCreationPolicy.STATELESS)
                 )
-                .authenticationProvider(authenticationProvider())
+                .authenticationProvider(authenticationProvider)
                 .addFilterBefore(
                         jwtAuthenticationFilter,
                         UsernamePasswordAuthenticationFilter.class
@@ -56,8 +60,15 @@ public class SecurityConfig {
     }
 
     @Bean
-    public AuthenticationProvider authenticationProvider() {
-        return new DaoAuthenticationProvider(userDetailsService);
+    public AuthenticationProvider authenticationProvider(
+            PasswordEncoder passwordEncoder
+    ) {
+        DaoAuthenticationProvider provider =
+                new DaoAuthenticationProvider(userDetailsService);
+
+        provider.setPasswordEncoder(passwordEncoder);
+
+        return provider;
     }
 
     @Bean

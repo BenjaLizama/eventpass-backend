@@ -1,4 +1,4 @@
-package cl.eventpass.ms_auth.security;
+package cl.eventpass.ms_auth.service;
 
 import cl.eventpass.ms_auth.repository.CredentialRepository;
 import lombok.RequiredArgsConstructor;

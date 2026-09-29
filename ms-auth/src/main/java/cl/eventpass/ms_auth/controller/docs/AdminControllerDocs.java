@@ -15,6 +15,7 @@ import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.RequestBody;
 
 import java.util.List;
 import java.util.UUID;
@@ -39,25 +40,42 @@ public interface AdminControllerDocs {
             @ApiResponse(
                     responseCode = "400",
                     description = "Los datos enviados no cumplen las validaciones requeridas.",
-                    content = @Content(schema = @Schema(implementation = StandardErrorResponse.class))
+                    content = @Content(
+                            schema = @Schema(
+                                    implementation = StandardErrorResponse.class
+                            )
+                    )
             ),
             @ApiResponse(
                     responseCode = "401",
                     description = "No existe una autenticación válida.",
-                    content = @Content(schema = @Schema(implementation = StandardErrorResponse.class))
+                    content = @Content(
+                            schema = @Schema(
+                                    implementation = StandardErrorResponse.class
+                            )
+                    )
             ),
             @ApiResponse(
                     responseCode = "403",
                     description = "El usuario autenticado no posee permisos de administrador.",
-                    content = @Content(schema = @Schema(implementation = StandardErrorResponse.class))
+                    content = @Content(
+                            schema = @Schema(
+                                    implementation = StandardErrorResponse.class
+                            )
+                    )
             ),
             @ApiResponse(
                     responseCode = "409",
                     description = "El correo electrónico ya se encuentra registrado.",
-                    content = @Content(schema = @Schema(implementation = StandardErrorResponse.class))
+                    content = @Content(
+                            schema = @Schema(
+                                    implementation = StandardErrorResponse.class
+                            )
+                    )
             )
     })
     ResponseEntity<StandardResponse<UserResponse>> createAdmin(
+            @RequestBody
             CreateUserRequest request
     );
 
@@ -75,25 +93,42 @@ public interface AdminControllerDocs {
             @ApiResponse(
                     responseCode = "400",
                     description = "Los datos enviados no cumplen las validaciones requeridas.",
-                    content = @Content(schema = @Schema(implementation = StandardErrorResponse.class))
+                    content = @Content(
+                            schema = @Schema(
+                                    implementation = StandardErrorResponse.class
+                            )
+                    )
             ),
             @ApiResponse(
                     responseCode = "401",
                     description = "No existe una autenticación válida.",
-                    content = @Content(schema = @Schema(implementation = StandardErrorResponse.class))
+                    content = @Content(
+                            schema = @Schema(
+                                    implementation = StandardErrorResponse.class
+                            )
+                    )
             ),
             @ApiResponse(
                     responseCode = "403",
                     description = "El usuario autenticado no posee permisos de administrador.",
-                    content = @Content(schema = @Schema(implementation = StandardErrorResponse.class))
+                    content = @Content(
+                            schema = @Schema(
+                                    implementation = StandardErrorResponse.class
+                            )
+                    )
             ),
             @ApiResponse(
                     responseCode = "409",
                     description = "El correo electrónico ya se encuentra registrado.",
-                    content = @Content(schema = @Schema(implementation = StandardErrorResponse.class))
+                    content = @Content(
+                            schema = @Schema(
+                                    implementation = StandardErrorResponse.class
+                            )
+                    )
             )
     })
     ResponseEntity<StandardResponse<UserResponse>> createStaff(
+            @RequestBody
             CreateUserRequest request
     );
 
@@ -111,25 +146,42 @@ public interface AdminControllerDocs {
             @ApiResponse(
                     responseCode = "400",
                     description = "Los datos enviados no cumplen las validaciones requeridas.",
-                    content = @Content(schema = @Schema(implementation = StandardErrorResponse.class))
+                    content = @Content(
+                            schema = @Schema(
+                                    implementation = StandardErrorResponse.class
+                            )
+                    )
             ),
             @ApiResponse(
                     responseCode = "401",
                     description = "No existe una autenticación válida.",
-                    content = @Content(schema = @Schema(implementation = StandardErrorResponse.class))
+                    content = @Content(
+                            schema = @Schema(
+                                    implementation = StandardErrorResponse.class
+                            )
+                    )
             ),
             @ApiResponse(
                     responseCode = "403",
                     description = "El usuario autenticado no posee permisos de administrador.",
-                    content = @Content(schema = @Schema(implementation = StandardErrorResponse.class))
+                    content = @Content(
+                            schema = @Schema(
+                                    implementation = StandardErrorResponse.class
+                            )
+                    )
             ),
             @ApiResponse(
                     responseCode = "409",
                     description = "El correo electrónico ya se encuentra registrado.",
-                    content = @Content(schema = @Schema(implementation = StandardErrorResponse.class))
+                    content = @Content(
+                            schema = @Schema(
+                                    implementation = StandardErrorResponse.class
+                            )
+                    )
             )
     })
     ResponseEntity<StandardResponse<UserResponse>> createOrganizer(
+            @RequestBody
             CreateUserRequest request
     );
 
@@ -147,25 +199,42 @@ public interface AdminControllerDocs {
             @ApiResponse(
                     responseCode = "400",
                     description = "Los datos enviados no cumplen las validaciones requeridas.",
-                    content = @Content(schema = @Schema(implementation = StandardErrorResponse.class))
+                    content = @Content(
+                            schema = @Schema(
+                                    implementation = StandardErrorResponse.class
+                            )
+                    )
             ),
             @ApiResponse(
                     responseCode = "401",
                     description = "No existe una autenticación válida.",
-                    content = @Content(schema = @Schema(implementation = StandardErrorResponse.class))
+                    content = @Content(
+                            schema = @Schema(
+                                    implementation = StandardErrorResponse.class
+                            )
+                    )
             ),
             @ApiResponse(
                     responseCode = "403",
                     description = "El usuario autenticado no posee permisos de administrador.",
-                    content = @Content(schema = @Schema(implementation = StandardErrorResponse.class))
+                    content = @Content(
+                            schema = @Schema(
+                                    implementation = StandardErrorResponse.class
+                            )
+                    )
             ),
             @ApiResponse(
                     responseCode = "409",
                     description = "El correo electrónico ya se encuentra registrado.",
-                    content = @Content(schema = @Schema(implementation = StandardErrorResponse.class))
+                    content = @Content(
+                            schema = @Schema(
+                                    implementation = StandardErrorResponse.class
+                            )
+                    )
             )
     })
     ResponseEntity<StandardResponse<UserResponse>> createSupport(
+            @RequestBody
             CreateUserRequest request
     );
 
@@ -183,12 +252,20 @@ public interface AdminControllerDocs {
             @ApiResponse(
                     responseCode = "401",
                     description = "No existe una autenticación válida.",
-                    content = @Content(schema = @Schema(implementation = StandardErrorResponse.class))
+                    content = @Content(
+                            schema = @Schema(
+                                    implementation = StandardErrorResponse.class
+                            )
+                    )
             ),
             @ApiResponse(
                     responseCode = "403",
                     description = "El usuario autenticado no posee permisos de administrador.",
-                    content = @Content(schema = @Schema(implementation = StandardErrorResponse.class))
+                    content = @Content(
+                            schema = @Schema(
+                                    implementation = StandardErrorResponse.class
+                            )
+                    )
             )
     })
     ResponseEntity<StandardResponse<List<UserResponse>>> getAllUsers();
@@ -207,17 +284,29 @@ public interface AdminControllerDocs {
             @ApiResponse(
                     responseCode = "401",
                     description = "No existe una autenticación válida.",
-                    content = @Content(schema = @Schema(implementation = StandardErrorResponse.class))
+                    content = @Content(
+                            schema = @Schema(
+                                    implementation = StandardErrorResponse.class
+                            )
+                    )
             ),
             @ApiResponse(
                     responseCode = "403",
                     description = "El usuario autenticado no posee permisos de administrador.",
-                    content = @Content(schema = @Schema(implementation = StandardErrorResponse.class))
+                    content = @Content(
+                            schema = @Schema(
+                                    implementation = StandardErrorResponse.class
+                            )
+                    )
             ),
             @ApiResponse(
                     responseCode = "404",
                     description = "No se encontró un usuario con el ID especificado.",
-                    content = @Content(schema = @Schema(implementation = StandardErrorResponse.class))
+                    content = @Content(
+                            schema = @Schema(
+                                    implementation = StandardErrorResponse.class
+                            )
+                    )
             )
     })
     ResponseEntity<StandardResponse<UserResponse>> getUserById(
@@ -247,27 +336,47 @@ public interface AdminControllerDocs {
                     description = "La solicitud es inválida. Puede ocurrir si no se proporciona ningún campo para actualizar, "
                             + "si el rol enviado no es válido, si el cuerpo de la solicitud está mal formado "
                             + "o si alguno de los campos no cumple las validaciones requeridas.",
-                    content = @Content(schema = @Schema(implementation = StandardErrorResponse.class))
+                    content = @Content(
+                            schema = @Schema(
+                                    implementation = StandardErrorResponse.class
+                            )
+                    )
             ),
             @ApiResponse(
                     responseCode = "401",
                     description = "No existe una autenticación válida.",
-                    content = @Content(schema = @Schema(implementation = StandardErrorResponse.class))
+                    content = @Content(
+                            schema = @Schema(
+                                    implementation = StandardErrorResponse.class
+                            )
+                    )
             ),
             @ApiResponse(
                     responseCode = "403",
                     description = "El usuario autenticado no posee permisos de administrador.",
-                    content = @Content(schema = @Schema(implementation = StandardErrorResponse.class))
+                    content = @Content(
+                            schema = @Schema(
+                                    implementation = StandardErrorResponse.class
+                            )
+                    )
             ),
             @ApiResponse(
                     responseCode = "404",
                     description = "No se encontró un usuario con el ID especificado.",
-                    content = @Content(schema = @Schema(implementation = StandardErrorResponse.class))
+                    content = @Content(
+                            schema = @Schema(
+                                    implementation = StandardErrorResponse.class
+                            )
+                    )
             ),
             @ApiResponse(
                     responseCode = "409",
                     description = "El correo electrónico proporcionado ya se encuentra registrado.",
-                    content = @Content(schema = @Schema(implementation = StandardErrorResponse.class))
+                    content = @Content(
+                            schema = @Schema(
+                                    implementation = StandardErrorResponse.class
+                            )
+                    )
             )
     })
     ResponseEntity<StandardResponse<UserResponse>> updateUser(
@@ -277,6 +386,8 @@ public interface AdminControllerDocs {
                     example = "550e8400-e29b-41d4-a716-446655440000"
             )
             UUID id,
+
+            @RequestBody
             UpdateUserRequest request
     );
 
@@ -296,22 +407,38 @@ public interface AdminControllerDocs {
             @ApiResponse(
                     responseCode = "400",
                     description = "La solicitud es inválida o el estado proporcionado no es válido.",
-                    content = @Content(schema = @Schema(implementation = StandardErrorResponse.class))
+                    content = @Content(
+                            schema = @Schema(
+                                    implementation = StandardErrorResponse.class
+                            )
+                    )
             ),
             @ApiResponse(
                     responseCode = "401",
                     description = "No existe una autenticación válida.",
-                    content = @Content(schema = @Schema(implementation = StandardErrorResponse.class))
+                    content = @Content(
+                            schema = @Schema(
+                                    implementation = StandardErrorResponse.class
+                            )
+                    )
             ),
             @ApiResponse(
                     responseCode = "403",
                     description = "El usuario autenticado no posee permisos de administrador.",
-                    content = @Content(schema = @Schema(implementation = StandardErrorResponse.class))
+                    content = @Content(
+                            schema = @Schema(
+                                    implementation = StandardErrorResponse.class
+                            )
+                    )
             ),
             @ApiResponse(
                     responseCode = "404",
                     description = "No se encontró un usuario con el ID especificado.",
-                    content = @Content(schema = @Schema(implementation = StandardErrorResponse.class))
+                    content = @Content(
+                            schema = @Schema(
+                                    implementation = StandardErrorResponse.class
+                            )
+                    )
             )
     })
     ResponseEntity<StandardResponse<UserResponse>> updateUserStatus(
@@ -321,6 +448,8 @@ public interface AdminControllerDocs {
                     example = "550e8400-e29b-41d4-a716-446655440000"
             )
             UUID id,
+
+            @RequestBody
             UpdateUserStatusRequest request
     );
 
@@ -343,17 +472,29 @@ public interface AdminControllerDocs {
             @ApiResponse(
                     responseCode = "401",
                     description = "No existe una autenticación válida.",
-                    content = @Content(schema = @Schema(implementation = StandardErrorResponse.class))
+                    content = @Content(
+                            schema = @Schema(
+                                    implementation = StandardErrorResponse.class
+                            )
+                    )
             ),
             @ApiResponse(
                     responseCode = "403",
                     description = "El usuario autenticado no posee permisos de administrador.",
-                    content = @Content(schema = @Schema(implementation = StandardErrorResponse.class))
+                    content = @Content(
+                            schema = @Schema(
+                                    implementation = StandardErrorResponse.class
+                            )
+                    )
             ),
             @ApiResponse(
                     responseCode = "404",
                     description = "No se encontró un usuario con el ID especificado o el usuario ya fue eliminado lógicamente.",
-                    content = @Content(schema = @Schema(implementation = StandardErrorResponse.class))
+                    content = @Content(
+                            schema = @Schema(
+                                    implementation = StandardErrorResponse.class
+                            )
+                    )
             )
     })
     ResponseEntity<StandardResponse<Void>> deleteUser(

@@ -1,6 +1,7 @@
 package cl.eventpass.ms_auth.entity;
 
 import cl.eventpass.ms_auth.enums.Role;
+import cl.eventpass.ms_auth.enums.UserStatus;
 import jakarta.annotation.Nonnull;
 import jakarta.persistence.*;
 import lombok.*;
@@ -31,10 +32,9 @@ public class CredentialEntity extends BaseEntity implements UserDetails {
     private Role role;
 
     @Builder.Default
-    @Column(name = "is_account_non_locked", nullable = false)
-    private boolean accountNonLocked = true;
-
-    // --- Metodos de Spring Security UserDetails ---
+    @Enumerated(EnumType.STRING)
+    @Column(name = "account_status", nullable = false)
+    private UserStatus status = UserStatus.ACTIVE;
 
     @Override
     @Nonnull
@@ -50,16 +50,21 @@ public class CredentialEntity extends BaseEntity implements UserDetails {
 
     @Override
     public boolean isAccountNonExpired() {
-        return UserDetails.super.isAccountNonExpired();
+        return true;
     }
 
     @Override
     public boolean isCredentialsNonExpired() {
-        return UserDetails.super.isCredentialsNonExpired();
+        return true;
+    }
+
+    @Override
+    public boolean isAccountNonLocked() {
+        return status != UserStatus.BLOCKED;
     }
 
     @Override
     public boolean isEnabled() {
-        return UserDetails.super.isEnabled();
+        return status == UserStatus.ACTIVE;
     }
 }

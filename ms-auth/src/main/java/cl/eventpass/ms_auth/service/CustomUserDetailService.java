@@ -17,7 +17,7 @@ public class CustomUserDetailService implements UserDetailsService {
     public UserDetails loadUserByUsername(String email)
             throws UsernameNotFoundException {
 
-        return credentialRepository.findByEmailActive(email)
+        return credentialRepository.findByEmailAndDeletedAtIsNull(email)
                 .orElseThrow(() ->
                         new UsernameNotFoundException(
                                 "Usuario no encontrado con el email: " + email

@@ -42,7 +42,7 @@ public class AuthService {
 
     @Transactional(readOnly = true)
     public UserResponse getCurrentUser(String email) {
-        return credentialRepository.findByEmailActive(email)
+        return credentialRepository.findByEmailAndDeletedAtIsNull(email)
                 .map(UserResponse::from)
                 .orElseThrow(() -> new ResourceNotFoundException("No se encontro el recurso solicitado."));
 
@@ -50,7 +50,7 @@ public class AuthService {
 
     @Transactional
     public AuthResponse register(RegisterRequest request) {
-        if (credentialRepository.findByEmailActive(request.email()).isPresent()) {
+        if (credentialRepository.findByEmailAndDeletedAtIsNull(request.email()).isPresent()) {
             throw new EmailAlreadyExistsException(request.email());
         }
 

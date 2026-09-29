@@ -3,6 +3,7 @@ package cl.eventpass.ms_auth.controller;
 import cl.eventpass.ms_auth.controller.docs.AdminControllerDocs;
 import cl.eventpass.ms_auth.dto.request.CreateUserRequest;
 import cl.eventpass.ms_auth.dto.request.UpdateUserRequest;
+import cl.eventpass.ms_auth.dto.request.UpdateUserStatusRequest;
 import cl.eventpass.ms_auth.dto.response.StandardResponse;
 import cl.eventpass.ms_auth.dto.response.UserResponse;
 import cl.eventpass.ms_auth.service.AdminService;
@@ -68,6 +69,21 @@ public class AdminController implements AdminControllerDocs {
                 );
     }
 
+    @PatchMapping("/users/{id}/status")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<StandardResponse<UserResponse>> updateUserStatus(@PathVariable UUID id, @RequestBody UpdateUserStatusRequest request) {
+        UserResponse response = adminService.updateUserStatus(id, request);
+
+        return ResponseEntity
+                .status(HttpStatus.OK)
+                .body(
+                        StandardResponse.ok(
+                                "Estado del usuario actualizado con exito.",
+                                response
+                        )
+                );
+    }
+
     @Override
     @PostMapping("/users/admin")
     @PreAuthorize("hasRole('ADMIN')")
@@ -94,7 +110,7 @@ public class AdminController implements AdminControllerDocs {
                 .status(HttpStatus.CREATED)
                 .body(
                         StandardResponse.created(
-                                "Administrador creado exitosamente.",
+                                "Staff creado exitosamente.",
                                 response
                         )
                 );
@@ -110,7 +126,7 @@ public class AdminController implements AdminControllerDocs {
                 .status(HttpStatus.CREATED)
                 .body(
                         StandardResponse.created(
-                                "Administrador creado exitosamente.",
+                                "Organizador creado exitosamente.",
                                 response
                         )
                 );
@@ -126,7 +142,7 @@ public class AdminController implements AdminControllerDocs {
                 .status(HttpStatus.CREATED)
                 .body(
                         StandardResponse.created(
-                                "Administrador creado exitosamente.",
+                                "Usuario de soporte creado exitosamente.",
                                 response
                         )
                 );

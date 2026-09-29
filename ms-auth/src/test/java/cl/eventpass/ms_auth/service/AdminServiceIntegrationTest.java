@@ -82,7 +82,7 @@ class AdminServiceIntegrationTest {
         assertThat(response.accountNonLocked()).isTrue();
 
         CredentialEntity savedUser =
-                credentialRepository.findByEmailActive("admin@test.com")
+                credentialRepository.findByEmailActiveAndDeletedIsNull("admin@test.com")
                         .orElseThrow();
 
         assertThat(savedUser.getEmail())
@@ -109,7 +109,7 @@ class AdminServiceIntegrationTest {
         assertThat(response.role()).isEqualTo(Role.STAFF);
 
         assertThat(
-                credentialRepository.findByEmailActive("staff@test.com")
+                credentialRepository.findByEmailActiveAndDeletedIsNull("staff@test.com")
         ).isPresent();
     }
 

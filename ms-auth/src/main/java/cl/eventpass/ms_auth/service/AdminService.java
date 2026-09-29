@@ -2,6 +2,7 @@ package cl.eventpass.ms_auth.service;
 
 import cl.eventpass.ms_auth.dto.request.CreateUserRequest;
 import cl.eventpass.ms_auth.dto.request.UpdateUserRequest;
+import cl.eventpass.ms_auth.dto.request.UpdateUserStatusRequest;
 import cl.eventpass.ms_auth.dto.response.UserResponse;
 import cl.eventpass.ms_auth.entity.CredentialEntity;
 import cl.eventpass.ms_auth.enums.Role;
@@ -93,6 +94,27 @@ public class AdminService {
         return UserResponse.from(updatedCredential);
     }
 
+    @Transactional
+    public UserResponse updateUserStatus(
+            UUID id,
+            UpdateUserStatusRequest request
+    ) {
+        CredentialEntity credential =
+                credentialRepository.findByIdAndDeletedAtIsNull(id)
+                        .orElseThrow(() ->
+                                new ResourceNotFoundException(
+                                        "No se encontró el usuario solicitado."
+                                )
+                        );
+
+        credential.setStatus(request.status());
+
+        CredentialEntity updatedCredential =
+                credentialRepository.save(credential);
+
+        return UserResponse.from(updatedCredential);
+    }
+
     public List<UserResponse> getAllUsers() {
         return credentialRepository.findAll()
                 .stream()
@@ -108,7 +130,7 @@ public class AdminService {
             CreateUserRequest request,
             Role role
     ) {
-        if (credentialRepository.findByEmailActive(request.email()).isPresent()) {
+        if (credentialRepository.findByEmailAndDeletedAtIsNull(request.email()).isPresent()) {
             throw new EmailAlreadyExistsException(request.email());
         }
 

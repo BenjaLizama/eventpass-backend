@@ -7,6 +7,8 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.security.authentication.BadCredentialsException;
+import org.springframework.security.authentication.DisabledException;
+import org.springframework.security.authentication.LockedException;
 import org.springframework.security.authorization.AuthorizationDeniedException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -88,6 +90,36 @@ public class GlobalExceptionHandler {
                 HttpStatus.BAD_REQUEST,
                 "INVALID_REQUEST",
                 ex.getMessage(),
+                ex,
+                request,
+                null
+        );
+    }
+
+    @ExceptionHandler(LockedException.class)
+    public ResponseEntity<StandardErrorResponse> handleLockedException(
+            LockedException ex,
+            HttpServletRequest request
+    ) {
+        return buildErrorResponse(
+                HttpStatus.UNAUTHORIZED,
+                "ACCOUNT_LOCKED",
+                "La cuenta se encuentra bloqueada.",
+                ex,
+                request,
+                null
+        );
+    }
+
+    @ExceptionHandler(DisabledException.class)
+    public ResponseEntity<StandardErrorResponse> handleDisabledException(
+            DisabledException ex,
+            HttpServletRequest request
+    ) {
+        return buildErrorResponse(
+                HttpStatus.UNAUTHORIZED,
+                "ACCOUNT_DISABLED",
+                "La cuenta se encuentra deshabilitada.",
                 ex,
                 request,
                 null

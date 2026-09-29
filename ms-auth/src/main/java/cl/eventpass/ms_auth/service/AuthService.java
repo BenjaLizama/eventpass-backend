@@ -44,29 +44,46 @@ public class AuthService {
     public UserResponse getCurrentUser(String email) {
         return credentialRepository.findByEmailAndDeletedAtIsNull(email)
                 .map(UserResponse::from)
-                .orElseThrow(() -> new ResourceNotFoundException("No se encontro el recurso solicitado."));
-
+                .orElseThrow(() ->
+                        new ResourceNotFoundException(
+                                "No se encontró el usuario solicitado."
+                        )
+                );
     }
 
     @Transactional
     public AuthResponse register(RegisterRequest request) {
-        if (credentialRepository.findByEmailAndDeletedAtIsNull(request.email()).isPresent()) {
+
+        if (credentialRepository
+                .findByEmailAndDeletedAtIsNull(request.email())
+                .isPresent()) {
+
             throw new EmailAlreadyExistsException(request.email());
         }
 
-        String encodedPassword = passwordEncoder.encode(request.password());
-        CredentialEntity credential = authMapper.toEntity(request, encodedPassword);
+        String encodedPassword =
+                passwordEncoder.encode(request.password());
+
+        CredentialEntity credential =
+                authMapper.toEntity(request, encodedPassword);
+
         credentialRepository.save(credential);
 
         return createAuthResponse(credential);
     }
 
     public AuthResponse login(LoginRequest request) {
+
         authenticationManager.authenticate(
-                new UsernamePasswordAuthenticationToken(request.email(), request.password())
+                new UsernamePasswordAuthenticationToken(
+                        request.email(),
+                        request.password()
+                )
         );
 
-        UserDetails user = userDetailsService.loadUserByUsername(request.email());
+        UserDetails user =
+                userDetailsService.loadUserByUsername(request.email());
+
         return createAuthResponse(user);
     }
 
@@ -74,9 +91,17 @@ public class AuthService {
 
         String refreshToken = request.refreshToken();
 
-        String userEmail = jwtService.extractUsername(refreshToken);
+        String userEmail;
 
-        if (userEmail == null) {
+        try {
+            userEmail = jwtService.extractUsername(refreshToken);
+        } catch (Exception ex) {
+            throw new InvalidTokenException(
+                    "Refresh token inválido."
+            );
+        }
+
+        if (userEmail == null || userEmail.isBlank()) {
             throw new InvalidTokenException(
                     "Refresh token malformado o sin usuario asignado."
             );
@@ -85,14 +110,33 @@ public class AuthService {
         UserDetails userDetails =
                 userDetailsService.loadUserByUsername(userEmail);
 
+        String sessionId;
+
+        try {
+            sessionId = jwtService.extractSessionId(refreshToken);
+        } catch (Exception ex) {
+            throw new InvalidTokenException(
+                    "Refresh token malformado o sin sesión asignada."
+            );
+        }
+
+        if (sessionId == null || sessionId.isBlank()) {
+            throw new InvalidTokenException(
+                    "Refresh token malformado o sin sesión asignada."
+            );
+        }
+
+        if (!sessionService.isSessionActive(sessionId)) {
+            throw new InvalidTokenException(
+                    "La sesión se encuentra cerrada o revocada."
+            );
+        }
+
         if (!jwtService.isTokenValid(refreshToken, userDetails)) {
             throw new InvalidTokenException(
                     "Refresh token inválido, expirado o revocado."
             );
         }
-
-        String sessionId =
-                jwtService.extractSessionId(refreshToken);
 
         String newAccessToken =
                 jwtService.generateToken(
@@ -108,7 +152,10 @@ public class AuthService {
     }
 
     public void logout(String authHeader) {
-        if (authHeader == null || !authHeader.startsWith("Bearer ")) {
+
+        if (authHeader == null ||
+                !authHeader.startsWith("Bearer ")) {
+
             throw new InvalidTokenException(
                     "Cabecera Authorization ausente o con formato incorrecto."
             );
@@ -116,9 +163,31 @@ public class AuthService {
 
         String jwt = authHeader.substring(7);
 
-        String jti = jwtService.extractJti(jwt);
-        String sessionId = jwtService.extractSessionId(jwt);
-        Date expiration = jwtService.extractExpiration(jwt);
+        String jti;
+        String sessionId;
+        Date expiration;
+
+        try {
+            jti = jwtService.extractJti(jwt);
+            sessionId = jwtService.extractSessionId(jwt);
+            expiration = jwtService.extractExpiration(jwt);
+        } catch (Exception ex) {
+            throw new InvalidTokenException(
+                    "Token inválido o malformado."
+            );
+        }
+
+        if (jti == null || jti.isBlank()) {
+            throw new InvalidTokenException(
+                    "El token no contiene un identificador válido."
+            );
+        }
+
+        if (sessionId == null || sessionId.isBlank()) {
+            throw new InvalidTokenException(
+                    "El token no contiene una sesión válida."
+            );
+        }
 
         if (!sessionService.isSessionActive(sessionId)) {
             throw new InvalidTokenException(
@@ -139,9 +208,10 @@ public class AuthService {
         sessionService.revokeSession(sessionId);
     }
 
-    public AuthResponse createAuthResponse(UserDetails user) {
+    private AuthResponse createAuthResponse(UserDetails user) {
 
-        String sessionId = UUID.randomUUID().toString();
+        String sessionId =
+                UUID.randomUUID().toString();
 
         sessionService.createSession(
                 sessionId,
@@ -149,10 +219,16 @@ public class AuthService {
         );
 
         String accessToken =
-                jwtService.generateToken(user, sessionId);
+                jwtService.generateToken(
+                        user,
+                        sessionId
+                );
 
         String refreshToken =
-                jwtService.generateRefreshToken(user, sessionId);
+                jwtService.generateRefreshToken(
+                        user,
+                        sessionId
+                );
 
         return AuthResponse.of(
                 accessToken,

@@ -28,8 +28,8 @@ public interface AuthControllerDocs {
 
     @Operation(
             summary = "Obtener perfil del usuario autenticado",
-            description = "Obtiene la información del perfil del usuario que se encuentra "
-                    + "actualmente autenticado a partir del Token JWT enviado en la cabecera de autorización."
+            description = "Obtiene la información del perfil del usuario actualmente autenticado "
+                    + "a partir del usuario asociado al Token JWT enviado en la cabecera de autorización."
     )
     @SecurityRequirement(name = "bearerAuth")
     @ApiResponses({
@@ -48,7 +48,7 @@ public interface AuthControllerDocs {
             ),
             @ApiResponse(
                     responseCode = "404",
-                    description = "El usuario asociado al token no existe o se encuentra inactivo.",
+                    description = "No se encontró el usuario asociado a la autenticación actual.",
                     content = @Content(
                             schema = @Schema(
                                     implementation = StandardErrorResponse.class
@@ -57,13 +57,15 @@ public interface AuthControllerDocs {
             )
     })
     ResponseEntity<StandardResponse<UserResponse>> me(
-            @Parameter(hidden = true)Authentication authentication
+            @Parameter(hidden = true)
+            Authentication authentication
     );
+
 
     @Operation(
             summary = "Registrar nuevo cliente",
-            description = "Crea una nueva cuenta con el rol CUSTOMER asignado por defecto " +
-                    "y devuelve la pareja inicial de tokens JWT."
+            description = "Crea una nueva cuenta con el rol CUSTOMER asignado por defecto "
+                    + "y devuelve la pareja inicial de tokens JWT."
     )
     @ApiResponses({
             @ApiResponse(
@@ -72,7 +74,7 @@ public interface AuthControllerDocs {
             ),
             @ApiResponse(
                     responseCode = "400",
-                    description = "Error de validación en la estructura o formato de las credenciales.",
+                    description = "Los datos enviados no cumplen las validaciones requeridas.",
                     content = @Content(
                             schema = @Schema(
                                     implementation = StandardErrorResponse.class
@@ -96,7 +98,8 @@ public interface AuthControllerDocs {
 
     @Operation(
             summary = "Iniciar sesión",
-            description = "Autentica las credenciales enviadas y genera tokens Access y Refresh activos."
+            description = "Autentica las credenciales enviadas y genera un Access Token "
+                    + "y un Refresh Token asociados a una nueva sesión."
     )
     @ApiResponses({
             @ApiResponse(
@@ -105,7 +108,7 @@ public interface AuthControllerDocs {
             ),
             @ApiResponse(
                     responseCode = "400",
-                    description = "Error de validación en el cuerpo de la petición.",
+                    description = "Los datos enviados no cumplen las validaciones requeridas.",
                     content = @Content(
                             schema = @Schema(
                                     implementation = StandardErrorResponse.class
@@ -114,7 +117,7 @@ public interface AuthControllerDocs {
             ),
             @ApiResponse(
                     responseCode = "401",
-                    description = "Credenciales inválidas (email o contraseña incorrectos).",
+                    description = "Las credenciales son inválidas o la cuenta no se encuentra habilitada para autenticarse.",
                     content = @Content(
                             schema = @Schema(
                                     implementation = StandardErrorResponse.class
@@ -129,17 +132,18 @@ public interface AuthControllerDocs {
 
     @Operation(
             summary = "Renovar Access Token",
-            description = "Genera un nuevo Access Token a partir de un Refresh Token " +
-                    "válido que no haya expirado ni sido revocado."
+            description = "Genera un nuevo Access Token utilizando un Refresh Token válido. "
+                    + "El Refresh Token debe ser válido, no estar expirado y pertenecer a una sesión "
+                    + "que continúe activa."
     )
     @ApiResponses({
             @ApiResponse(
                     responseCode = "200",
-                    description = "Token renovado exitosamente."
+                    description = "Access Token renovado exitosamente."
             ),
             @ApiResponse(
                     responseCode = "400",
-                    description = "Petición malformada o campo de token faltante.",
+                    description = "La petición es malformada o el Refresh Token no fue proporcionado correctamente.",
                     content = @Content(
                             schema = @Schema(
                                     implementation = StandardErrorResponse.class
@@ -148,7 +152,8 @@ public interface AuthControllerDocs {
             ),
             @ApiResponse(
                     responseCode = "401",
-                    description = "Refresh token inválido, expirado o malformado.",
+                    description = "El Refresh Token es inválido, está expirado, está malformado "
+                            + "o la sesión asociada fue cerrada o revocada.",
                     content = @Content(
                             schema = @Schema(
                                     implementation = StandardErrorResponse.class
@@ -163,20 +168,20 @@ public interface AuthControllerDocs {
 
     @Operation(
             summary = "Cerrar sesión",
-            description = "Revoca la sesión asociada al Access Token actual. "
-                    + "La sesión se elimina de Redis, invalidando tanto el Access Token "
-                    + "como el Refresh Token asociados a ella."
+            description = "Cierra la sesión asociada al Access Token actual. "
+                    + "La sesión queda revocada y el token actual es agregado a la lista de tokens "
+                    + "revocados mientras permanezca vigente."
     )
     @SecurityRequirement(name = "bearerAuth")
     @ApiResponses({
             @ApiResponse(
                     responseCode = "200",
-                    description = "Sesión cerrada correctamente. Los tokens asociados a la sesión han sido revocados."
+                    description = "Sesión cerrada correctamente."
             ),
             @ApiResponse(
                     responseCode = "401",
-                    description = "Cabecera de autorización ausente, formato de token "
-                            + "Bearer incorrecto o token ya inválido.",
+                    description = "La cabecera de autorización está ausente, tiene un formato incorrecto, "
+                            + "el token es inválido o la sesión ya fue cerrada o revocada.",
                     content = @Content(
                             schema = @Schema(
                                     implementation = StandardErrorResponse.class

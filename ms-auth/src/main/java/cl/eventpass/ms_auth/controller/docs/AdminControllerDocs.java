@@ -1,6 +1,7 @@
 package cl.eventpass.ms_auth.controller.docs;
 
 import cl.eventpass.ms_auth.dto.request.CreateUserRequest;
+import cl.eventpass.ms_auth.dto.request.UpdateUserRequest;
 import cl.eventpass.ms_auth.dto.response.StandardErrorResponse;
 import cl.eventpass.ms_auth.dto.response.StandardResponse;
 import cl.eventpass.ms_auth.dto.response.UserResponse;
@@ -308,5 +309,76 @@ public interface AdminControllerDocs {
                     example = "550e8400-e29b-41d4-a716-446655440000"
             )
             UUID id
+    );
+
+    @Operation(
+            summary = "Actualizar usuario",
+            description = "Actualiza parcialmente la información de un usuario existente. "
+                    + "Se puede modificar el correo electrónico, el rol o ambos campos. "
+                    + "Debe proporcionarse al menos uno de estos campos. "
+                    + "Este endpoint solamente puede ser utilizado por un usuario que posea el rol ADMIN."
+    )
+    @ApiResponses({
+            @ApiResponse(
+                    responseCode = "200",
+                    description = "Usuario actualizado exitosamente."
+            ),
+            @ApiResponse(
+                    responseCode = "400",
+                    description = "La solicitud es inválida. Puede ocurrir si no se proporciona ningún campo para actualizar, "
+                            + "si el rol enviado no es válido, si el cuerpo de la solicitud está mal formado "
+                            + "o si alguno de los campos no cumple las validaciones requeridas.",
+                    content = @Content(
+                            schema = @Schema(
+                                    implementation = StandardErrorResponse.class
+                            )
+                    )
+            ),
+            @ApiResponse(
+                    responseCode = "401",
+                    description = "No existe una autenticación válida.",
+                    content = @Content(
+                            schema = @Schema(
+                                    implementation = StandardErrorResponse.class
+                            )
+                    )
+            ),
+            @ApiResponse(
+                    responseCode = "403",
+                    description = "El usuario autenticado no posee permisos de administrador.",
+                    content = @Content(
+                            schema = @Schema(
+                                    implementation = StandardErrorResponse.class
+                            )
+                    )
+            ),
+            @ApiResponse(
+                    responseCode = "404",
+                    description = "No se encontró un usuario con el ID especificado.",
+                    content = @Content(
+                            schema = @Schema(
+                                    implementation = StandardErrorResponse.class
+                            )
+                    )
+            ),
+            @ApiResponse(
+                    responseCode = "409",
+                    description = "El correo electrónico proporcionado ya se encuentra registrado.",
+                    content = @Content(
+                            schema = @Schema(
+                                    implementation = StandardErrorResponse.class
+                            )
+                    )
+            )
+    })
+    ResponseEntity<StandardResponse<UserResponse>> updateUser(
+            @Parameter(
+                    description = "Identificador único del usuario que se desea actualizar.",
+                    required = true,
+                    example = "550e8400-e29b-41d4-a716-446655440000"
+            )
+            UUID id,
+
+            UpdateUserRequest request
     );
 }

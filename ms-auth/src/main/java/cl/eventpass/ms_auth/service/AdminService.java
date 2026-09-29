@@ -1,10 +1,13 @@
 package cl.eventpass.ms_auth.service;
 
 import cl.eventpass.ms_auth.dto.request.CreateUserRequest;
+import cl.eventpass.ms_auth.dto.request.UpdateUserRequest;
 import cl.eventpass.ms_auth.dto.response.UserResponse;
 import cl.eventpass.ms_auth.entity.CredentialEntity;
 import cl.eventpass.ms_auth.enums.Role;
 import cl.eventpass.ms_auth.exception.EmailAlreadyExistsException;
+import cl.eventpass.ms_auth.exception.InvalidRequestException;
+import cl.eventpass.ms_auth.exception.ResourceConflictException;
 import cl.eventpass.ms_auth.exception.ResourceNotFoundException;
 import cl.eventpass.ms_auth.repository.CredentialRepository;
 import lombok.RequiredArgsConstructor;
@@ -49,6 +52,45 @@ public class AdminService {
                 .orElseThrow(() ->
                         new ResourceNotFoundException("No se encontró el usuario solicitado.")
                 );
+    }
+
+    @Transactional
+    public UserResponse updateUser(UUID id, UpdateUserRequest request) {
+
+        if (request.email() == null && request.role() == null) {
+            throw new InvalidRequestException(
+                    "Debe proporcionar al menos un campo para actualizar."
+            );
+        }
+
+        CredentialEntity credential = credentialRepository.findById(id)
+                .orElseThrow(() ->
+                        new ResourceNotFoundException(
+                                "No se encontró el usuario solicitado."
+                        )
+                );
+
+        if (request.email() != null &&
+                !request.email().equals(credential.getEmail())) {
+
+            credentialRepository.findByEmail(request.email())
+                    .ifPresent(existing -> {
+                        throw new ResourceConflictException(
+                                "El correo electrónico ya se encuentra registrado."
+                        );
+                    });
+
+            credential.setEmail(request.email());
+        }
+
+        if (request.role() != null) {
+            credential.setRole(request.role());
+        }
+
+        CredentialEntity updatedCredential =
+                credentialRepository.save(credential);
+
+        return UserResponse.from(updatedCredential);
     }
 
     public List<UserResponse> getAllUsers() {

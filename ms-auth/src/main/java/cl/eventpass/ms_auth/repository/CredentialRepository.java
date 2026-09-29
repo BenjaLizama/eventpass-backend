@@ -16,6 +16,8 @@ public interface CredentialRepository extends JpaRepository<CredentialEntity, UU
     @Query("SELECT c FROM CredentialEntity c WHERE c.email = :email AND c.deletedAt IS NULL")
     Optional<CredentialEntity> findByEmailActive(@Param("email") String email);
 
+    Optional<CredentialEntity> findByEmail(String email);
+
     boolean existsByEmailAndDeletedAtIsNull(String email);
     boolean existsByRole(Role role);
 }

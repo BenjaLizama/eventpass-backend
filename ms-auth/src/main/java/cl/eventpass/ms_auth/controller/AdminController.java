@@ -2,6 +2,7 @@ package cl.eventpass.ms_auth.controller;
 
 import cl.eventpass.ms_auth.controller.docs.AdminControllerDocs;
 import cl.eventpass.ms_auth.dto.request.CreateUserRequest;
+import cl.eventpass.ms_auth.dto.request.UpdateUserRequest;
 import cl.eventpass.ms_auth.dto.response.StandardResponse;
 import cl.eventpass.ms_auth.dto.response.UserResponse;
 import cl.eventpass.ms_auth.service.AdminService;
@@ -49,6 +50,22 @@ public class AdminController implements AdminControllerDocs {
                         "Usuario obtenido exitosamente.",
                         response
                 ));
+    }
+
+    @Override
+    @PatchMapping("/users/{id}")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<StandardResponse<UserResponse>> updateUser(@PathVariable UUID id, @RequestBody UpdateUserRequest request) {
+        UserResponse response = adminService.updateUser(id, request);
+
+        return ResponseEntity
+                .status(HttpStatus.OK)
+                .body(
+                        StandardResponse.ok(
+                                "Usuario actualizado con exito.",
+                                response
+                        )
+                );
     }
 
     @Override

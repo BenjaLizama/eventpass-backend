@@ -5,6 +5,7 @@ import cl.eventpass.ms_auth.dto.response.StandardErrorResponse;
 import cl.eventpass.ms_auth.dto.response.StandardResponse;
 import cl.eventpass.ms_auth.dto.response.UserResponse;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -14,6 +15,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.http.ResponseEntity;
 
 import java.util.List;
+import java.util.UUID;
 
 @Tag(
         name = "Administration",
@@ -259,4 +261,52 @@ public interface AdminControllerDocs {
             )
     })
     ResponseEntity<StandardResponse<List<UserResponse>>> getAllUsers();
+
+
+    @Operation(
+            summary = "Obtener usuario por ID",
+            description = "Obtiene el detalle completo de un usuario mediante su identificador único. "
+                    + "Este endpoint solamente puede ser utilizado por un usuario que posea el rol ADMIN."
+    )
+    @ApiResponses({
+            @ApiResponse(
+                    responseCode = "200",
+                    description = "Usuario obtenido exitosamente."
+            ),
+            @ApiResponse(
+                    responseCode = "401",
+                    description = "No existe una autenticación válida.",
+                    content = @Content(
+                            schema = @Schema(
+                                    implementation = StandardErrorResponse.class
+                            )
+                    )
+            ),
+            @ApiResponse(
+                    responseCode = "403",
+                    description = "El usuario autenticado no posee permisos de administrador.",
+                    content = @Content(
+                            schema = @Schema(
+                                    implementation = StandardErrorResponse.class
+                            )
+                    )
+            ),
+            @ApiResponse(
+                    responseCode = "404",
+                    description = "No se encontró un usuario con el ID especificado.",
+                    content = @Content(
+                            schema = @Schema(
+                                    implementation = StandardErrorResponse.class
+                            )
+                    )
+            )
+    })
+    ResponseEntity<StandardResponse<UserResponse>> getUserById(
+            @Parameter(
+                    description = "Identificador único del usuario.",
+                    required = true,
+                    example = "550e8400-e29b-41d4-a716-446655440000"
+            )
+            UUID id
+    );
 }

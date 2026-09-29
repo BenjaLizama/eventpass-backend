@@ -5,6 +5,7 @@ import cl.eventpass.ms_auth.dto.response.UserResponse;
 import cl.eventpass.ms_auth.entity.CredentialEntity;
 import cl.eventpass.ms_auth.enums.Role;
 import cl.eventpass.ms_auth.exception.EmailAlreadyExistsException;
+import cl.eventpass.ms_auth.exception.ResourceNotFoundException;
 import cl.eventpass.ms_auth.repository.CredentialRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -12,6 +13,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
@@ -40,10 +42,20 @@ public class AdminService {
         return createUser(request, Role.SUPPORT);
     }
 
+    @Transactional(readOnly = true)
+    public UserResponse getUserById(UUID id) {
+        return credentialRepository.findById(id)
+                .map(UserResponse::from)
+                .orElseThrow(() ->
+                        new ResourceNotFoundException("No se encontró el usuario solicitado.")
+                );
+    }
+
     public List<UserResponse> getAllUsers() {
         return credentialRepository.findAll()
                 .stream()
                 .map(user -> new UserResponse(
+                        user.getId(),
                         user.getEmail(),
                         user.getRole(),
                         user.isAccountNonLocked()

@@ -13,6 +13,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.UUID;
 
 @RestController
 @RequestMapping("/api/v1/admin")
@@ -34,6 +35,20 @@ public class AdminController implements AdminControllerDocs {
                                 response
                         )
                 );
+    }
+
+    @Override
+    @GetMapping("/users/{id}")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<StandardResponse<UserResponse>> getUserById(@PathVariable UUID id) {
+        UserResponse response = adminService.getUserById(id);
+
+        return ResponseEntity
+                .status(HttpStatus.OK)
+                .body(StandardResponse.ok(
+                        "Usuario obtenido exitosamente.",
+                        response
+                ));
     }
 
     @Override

@@ -25,11 +25,11 @@ public interface EventRepository extends JpaRepository<EventEntity, UUID> {
 
     // Busqueda para el catalogo publico (solo eventos en estado PUBLISHED)
     @EntityGraph(attributePaths = {"venue"})
-    Page findByStatusAndDeleteAtIsNull(EventStatus status, Pageable pageable);
+    Page findByStatusAndDeletedAtIsNull(EventStatus status, Pageable pageable);
 
     // Filtrado de catalogo por categoria y estado
     @EntityGraph(attributePaths = {"venue"})
-    Page findByStatusAndCategoryAndDeleteAtIsNull(
+    Page findByStatusAndCategoryAndDeletedAtIsNull(
             EventStatus status,
             EventCategory category,
             Pageable pageable

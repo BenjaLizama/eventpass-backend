@@ -19,8 +19,8 @@ public interface VenueRepository extends JpaRepository<VenueEntity, UUID> {
     Optional<VenueEntity> findActiveById(@Param("id") UUID id);
 
     // Listado paginado de recintos activos por ciudad.
-    Page findByCityIgnoreCaseAndDeleteAtIsNull(String city, Pageable pageable);
+    Page findByCityIgnoreCaseAndDeletedAtIsNull(String city, Pageable pageable);
 
     // Listado de todos los recintos activos paginados.
-    Page findByDeleteAtIsNull(Pageable pageable);
+    Page findByDeletedAtIsNull(Pageable pageable);
 }

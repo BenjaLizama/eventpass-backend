@@ -1,5 +1,6 @@
 package cl.eventpass.ms_events.dto.request;
 
+import cl.eventpass.ms_events.dto.response.TicketCategoryResponse;
 import cl.eventpass.ms_events.entity.TicketCategoryEntity;
 import cl.eventpass.ms_events.enums.EventCategory;
 import jakarta.validation.Valid;
@@ -33,6 +34,6 @@ public record EventCreateRequest(
 
         @NotEmpty(message = "Debe incluir al menos una categoría de entradas")
         @Valid
-        List<TicketCategoryEntity> ticketCategories
+        List<TicketCategoryRequest> ticketCategories
 ) {
 }

@@ -3,12 +3,11 @@ package cl.eventpass.ms_auth.service;
 import cl.eventpass.ms_auth.dto.request.LoginRequest;
 import cl.eventpass.ms_auth.dto.request.RefreshTokenRequest;
 import cl.eventpass.ms_auth.dto.request.RegisterRequest;
+import cl.eventpass.ms_auth.dto.request.UpdateMyProfileRequest;
 import cl.eventpass.ms_auth.dto.response.AuthResponse;
 import cl.eventpass.ms_auth.dto.response.UserResponse;
 import cl.eventpass.ms_auth.entity.CredentialEntity;
-import cl.eventpass.ms_auth.exception.EmailAlreadyExistsException;
-import cl.eventpass.ms_auth.exception.InvalidTokenException;
-import cl.eventpass.ms_auth.exception.ResourceNotFoundException;
+import cl.eventpass.ms_auth.exception.*;
 import cl.eventpass.ms_auth.mapper.AuthMapper;
 import cl.eventpass.ms_auth.repository.CredentialRepository;
 import lombok.RequiredArgsConstructor;
@@ -49,6 +48,40 @@ public class AuthService {
                                 "No se encontró el usuario solicitado."
                         )
                 );
+    }
+
+    @Transactional
+    public UserResponse updateCurrentUser(
+            String currentEmail,
+            String sessionId,
+            UpdateMyProfileRequest request
+    ) {
+        CredentialEntity credential =
+                credentialRepository.findByEmailAndDeletedAtIsNull(currentEmail)
+                        .orElseThrow(() ->
+                                new ResourceNotFoundException(
+                                        "No se encontró el usuario solicitado."
+                                )
+                        );
+
+        if (!request.email().equals(credential.getEmail())) {
+
+            credentialRepository.findByEmail(request.email())
+                    .ifPresent(existing -> {
+                        throw new ResourceConflictException(
+                                "El correo electrónico ya se encuentra registrado."
+                        );
+                    });
+
+            credential.setEmail(request.email());
+
+            sessionService.revokeSession(sessionId);
+        }
+
+        CredentialEntity updatedCredential =
+                credentialRepository.save(credential);
+
+        return UserResponse.from(updatedCredential);
     }
 
     @Transactional

@@ -3,6 +3,7 @@ package cl.eventpass.ms_auth.controller.docs;
 import cl.eventpass.ms_auth.dto.request.LoginRequest;
 import cl.eventpass.ms_auth.dto.request.RefreshTokenRequest;
 import cl.eventpass.ms_auth.dto.request.RegisterRequest;
+import cl.eventpass.ms_auth.dto.request.UpdateMyProfileRequest;
 import cl.eventpass.ms_auth.dto.response.AuthResponse;
 import cl.eventpass.ms_auth.dto.response.StandardErrorResponse;
 import cl.eventpass.ms_auth.dto.response.StandardResponse;
@@ -18,11 +19,12 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 
 @Tag(
         name = "Authentication",
-        description = "Endpoints para registro, inicio de sesión, renovación de tokens y cierre de sesión."
+        description = "Endpoints para registro, autenticación, gestión del perfil, renovación de tokens y cierre de sesión."
 )
 public interface AuthControllerDocs {
 
@@ -61,6 +63,66 @@ public interface AuthControllerDocs {
             Authentication authentication
     );
 
+
+    @Operation(
+            summary = "Actualizar perfil del usuario autenticado",
+            description = "Actualiza la información del perfil del usuario actualmente autenticado. "
+                    + "El usuario es identificado mediante el Token JWT enviado en la cabecera de autorización. "
+                    + "Actualmente permite modificar el correo electrónico. "
+                    + "Si el correo electrónico es modificado, la sesión actual será revocada "
+                    + "y el usuario deberá iniciar sesión nuevamente utilizando el nuevo correo."
+    )
+    @SecurityRequirement(name = "bearerAuth")
+    @ApiResponses({
+            @ApiResponse(
+                    responseCode = "200",
+                    description = "Perfil de usuario actualizado exitosamente."
+            ),
+            @ApiResponse(
+                    responseCode = "400",
+                    description = "El correo electrónico no cumple las validaciones requeridas.",
+                    content = @Content(
+                            schema = @Schema(
+                                    implementation = StandardErrorResponse.class
+                            )
+                    )
+            ),
+            @ApiResponse(
+                    responseCode = "401",
+                    description = "No existe una autenticación válida, el token ha expirado "
+                            + "o la sesión asociada fue revocada.",
+                    content = @Content(
+                            schema = @Schema(
+                                    implementation = StandardErrorResponse.class
+                            )
+                    )
+            ),
+            @ApiResponse(
+                    responseCode = "404",
+                    description = "No se encontró el usuario asociado a la autenticación actual.",
+                    content = @Content(
+                            schema = @Schema(
+                                    implementation = StandardErrorResponse.class
+                            )
+                    )
+            ),
+            @ApiResponse(
+                    responseCode = "409",
+                    description = "El correo electrónico ingresado ya se encuentra registrado.",
+                    content = @Content(
+                            schema = @Schema(
+                                    implementation = StandardErrorResponse.class
+                            )
+                    )
+            )
+    })
+    ResponseEntity<StandardResponse<UserResponse>> updateCurrentUser(
+            @Parameter(hidden = true)
+            Authentication authentication,
+
+            @RequestBody
+            UpdateMyProfileRequest request
+    );
 
     @Operation(
             summary = "Registrar nuevo cliente",

@@ -69,6 +69,7 @@ public class AdminController implements AdminControllerDocs {
                 );
     }
 
+    @Override
     @PatchMapping("/users/{id}/status")
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<StandardResponse<UserResponse>> updateUserStatus(@PathVariable UUID id, @RequestBody UpdateUserStatusRequest request) {

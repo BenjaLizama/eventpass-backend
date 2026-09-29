@@ -4,12 +4,13 @@ import cl.eventpass.ms_auth.dto.request.LoginRequest;
 import cl.eventpass.ms_auth.dto.request.RefreshTokenRequest;
 import cl.eventpass.ms_auth.dto.request.RegisterRequest;
 import cl.eventpass.ms_auth.dto.response.AuthResponse;
+import cl.eventpass.ms_auth.dto.response.UserResponse;
 import cl.eventpass.ms_auth.entity.CredentialEntity;
 import cl.eventpass.ms_auth.exception.EmailAlreadyExistsException;
 import cl.eventpass.ms_auth.exception.InvalidTokenException;
+import cl.eventpass.ms_auth.exception.ResourceNotFoundException;
 import cl.eventpass.ms_auth.mapper.AuthMapper;
 import cl.eventpass.ms_auth.repository.CredentialRepository;
-import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.authentication.AuthenticationManager;
@@ -18,6 +19,7 @@ import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Date;
 import java.util.UUID;
@@ -37,6 +39,14 @@ public class AuthService {
 
     @Value("${application.security.jwt.expiration}")
     private long jwtExpiration;
+
+    @Transactional(readOnly = true)
+    public UserResponse getCurrentUser(String email) {
+        return credentialRepository.findByEmailActive(email)
+                .map(UserResponse::from)
+                .orElseThrow(() -> new ResourceNotFoundException("No se encontro el recurso solicitado."));
+
+    }
 
     @Transactional
     public AuthResponse register(RegisterRequest request) {

@@ -6,6 +6,7 @@ import cl.eventpass.ms_auth.dto.request.RegisterRequest;
 import cl.eventpass.ms_auth.dto.response.AuthResponse;
 import cl.eventpass.ms_auth.dto.response.StandardErrorResponse;
 import cl.eventpass.ms_auth.dto.response.StandardResponse;
+import cl.eventpass.ms_auth.dto.response.UserResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -16,6 +17,7 @@ import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.RequestHeader;
 
 @Tag(
@@ -23,6 +25,40 @@ import org.springframework.web.bind.annotation.RequestHeader;
         description = "Endpoints para registro, inicio de sesión, renovación de tokens y cierre de sesión."
 )
 public interface AuthControllerDocs {
+
+    @Operation(
+            summary = "Obtener perfil del usuario autenticado",
+            description = "Obtiene la información del perfil del usuario que se encuentra "
+                    + "actualmente autenticado a partir del Token JWT enviado en la cabecera de autorización."
+    )
+    @SecurityRequirement(name = "bearerAuth")
+    @ApiResponses({
+            @ApiResponse(
+                    responseCode = "200",
+                    description = "Perfil de usuario obtenido exitosamente."
+            ),
+            @ApiResponse(
+                    responseCode = "401",
+                    description = "No existe una autenticación válida, el token ha expirado o no fue provisto.",
+                    content = @Content(
+                            schema = @Schema(
+                                    implementation = StandardErrorResponse.class
+                            )
+                    )
+            ),
+            @ApiResponse(
+                    responseCode = "404",
+                    description = "El usuario asociado al token no existe o se encuentra inactivo.",
+                    content = @Content(
+                            schema = @Schema(
+                                    implementation = StandardErrorResponse.class
+                            )
+                    )
+            )
+    })
+    ResponseEntity<StandardResponse<UserResponse>> me(
+            @Parameter(hidden = true)Authentication authentication
+    );
 
     @Operation(
             summary = "Registrar nuevo cliente",

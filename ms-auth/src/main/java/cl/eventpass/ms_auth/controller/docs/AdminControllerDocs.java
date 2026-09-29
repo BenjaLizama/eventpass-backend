@@ -237,12 +237,7 @@ public interface AdminControllerDocs {
     @ApiResponses({
             @ApiResponse(
                     responseCode = "200",
-                    description = "Usuarios obtenidos exitosamente.",
-                    content = @Content(
-                            schema = @Schema(
-                                    implementation = UserResponse.class
-                            )
-                    )
+                    description = "Usuarios obtenidos exitosamente."
             ),
             @ApiResponse(
                     responseCode = "401",

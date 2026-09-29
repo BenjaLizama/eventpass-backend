@@ -6,12 +6,15 @@ import cl.eventpass.ms_auth.dto.request.RefreshTokenRequest;
 import cl.eventpass.ms_auth.dto.request.RegisterRequest;
 import cl.eventpass.ms_auth.dto.response.AuthResponse;
 import cl.eventpass.ms_auth.dto.response.StandardResponse;
+import cl.eventpass.ms_auth.dto.response.UserResponse;
 import cl.eventpass.ms_auth.service.AuthService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
@@ -20,6 +23,16 @@ import org.springframework.web.bind.annotation.*;
 public class AuthController implements AuthControllerDocs {
 
     private final AuthService authService;
+
+    @Override
+    @GetMapping("/me")
+    public ResponseEntity<StandardResponse<UserResponse>> me(Authentication authentication) {
+        UserResponse response = authService.getCurrentUser(authentication.getName());
+
+        return ResponseEntity
+                .status(HttpStatus.OK)
+                .body(StandardResponse.ok("Usuario obtenido exitosamente.", response));
+    }
 
     @Override
     @PostMapping("/register")

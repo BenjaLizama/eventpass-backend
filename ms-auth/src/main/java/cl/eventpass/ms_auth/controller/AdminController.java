@@ -85,6 +85,22 @@ public class AdminController implements AdminControllerDocs {
     }
 
     @Override
+    @DeleteMapping("/users/{id}")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<StandardResponse<Void>> deleteUser(@PathVariable UUID id) {
+        adminService.deleteUser(id);
+
+        return ResponseEntity
+                .status(HttpStatus.OK)
+                .body(
+                        StandardResponse.ok(
+                            "Usuario eliminado exitosamente.",
+                            null
+                        )
+                );
+    }
+
+    @Override
     @PostMapping("/users/admin")
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<StandardResponse<UserResponse>> createAdmin(@Valid @RequestBody CreateUserRequest request) {

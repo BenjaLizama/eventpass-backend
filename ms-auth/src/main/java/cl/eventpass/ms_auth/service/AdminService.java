@@ -16,6 +16,8 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Instant;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
 
@@ -113,6 +115,15 @@ public class AdminService {
                 credentialRepository.save(credential);
 
         return UserResponse.from(updatedCredential);
+    }
+
+    @Transactional
+    public void deleteUser(UUID id) {
+        CredentialEntity credential = credentialRepository.findByIdAndDeletedAtIsNull(id)
+                .orElseThrow(() -> new ResourceNotFoundException("No se encontró el usuario solicitado."));
+
+        credential.setDeletedAt(Instant.now());
+        credentialRepository.save(credential);
     }
 
     public List<UserResponse> getAllUsers() {

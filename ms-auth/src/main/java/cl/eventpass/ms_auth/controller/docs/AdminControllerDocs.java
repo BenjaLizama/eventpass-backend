@@ -323,4 +323,45 @@ public interface AdminControllerDocs {
             UUID id,
             UpdateUserStatusRequest request
     );
+
+
+    @Operation(
+            summary = "Eliminar usuario",
+            description = "Realiza el borrado lógico de un usuario existente. "
+                    + "La cuenta no es eliminada físicamente de la base de datos. "
+                    + "En su lugar, se registra la fecha de eliminación lógica. "
+                    + "Las cuentas eliminadas lógicamente no pueden autenticarse "
+                    + "ni ser modificadas mediante los endpoints administrativos "
+                    + "que operan sobre cuentas no eliminadas. "
+                    + "Este endpoint solamente puede ser utilizado por un usuario que posea el rol ADMIN."
+    )
+    @ApiResponses({
+            @ApiResponse(
+                    responseCode = "200",
+                    description = "Usuario eliminado exitosamente."
+            ),
+            @ApiResponse(
+                    responseCode = "401",
+                    description = "No existe una autenticación válida.",
+                    content = @Content(schema = @Schema(implementation = StandardErrorResponse.class))
+            ),
+            @ApiResponse(
+                    responseCode = "403",
+                    description = "El usuario autenticado no posee permisos de administrador.",
+                    content = @Content(schema = @Schema(implementation = StandardErrorResponse.class))
+            ),
+            @ApiResponse(
+                    responseCode = "404",
+                    description = "No se encontró un usuario con el ID especificado o el usuario ya fue eliminado lógicamente.",
+                    content = @Content(schema = @Schema(implementation = StandardErrorResponse.class))
+            )
+    })
+    ResponseEntity<StandardResponse<Void>> deleteUser(
+            @Parameter(
+                    description = "Identificador único del usuario que se desea eliminar.",
+                    required = true,
+                    example = "550e8400-e29b-41d4-a716-446655440000"
+            )
+            UUID id
+    );
 }

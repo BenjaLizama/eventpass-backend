@@ -27,6 +27,17 @@ services:
     volumes:
       - postgres_events_data:/var/lib/postgresql/data
 
+  # Emulador de AWS SQS para entorno local
+  localstack:
+    image: localstack/localstack:3.4.0
+    container_name: localstack-eventpass
+    ports:
+      - "4566:4566"
+    environment:
+      - AWS_DEFAULT_REGION=us-east-1
+    volumes:
+      - ./scripts:/etc/localstack/init/ready.d
+
   redis:
     image: redis:7-alpine
     container_name: eventpass-redis

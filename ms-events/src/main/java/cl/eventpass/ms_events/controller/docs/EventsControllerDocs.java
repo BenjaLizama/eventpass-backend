@@ -1,8 +1,10 @@
 package cl.eventpass.ms_events.controller.docs;
 
 import cl.eventpass.ms_events.config.annotation.CurrentUserId;
+import cl.eventpass.ms_events.dto.request.CapacityReservationRequest;
 import cl.eventpass.ms_events.dto.request.EventCreateRequest;
 import cl.eventpass.ms_events.dto.request.EventUpdateRequest;
+import cl.eventpass.ms_events.dto.response.CapacityReservationResponse;
 import cl.eventpass.ms_events.dto.response.EventResponse;
 import cl.eventpass.ms_events.dto.response.StandardErrorResponse;
 import cl.eventpass.ms_events.dto.response.StandardResponse;
@@ -399,5 +401,56 @@ public interface EventsControllerDocs {
             @Parameter(hidden = true)
             @CurrentUserId
             UUID userId
+    );
+
+    @Operation(
+            summary = "Reservar capacidad de entradas",
+            description = "Reserva temporalmente una cantidad de entradas de una categoría "
+                    + "específica para un evento."
+    )
+    @SecurityRequirement(name = "bearerAuth")
+    @ApiResponses({
+            @ApiResponse(
+                    responseCode = "200",
+                    description = "Capacidad reservada exitosamente."
+            ),
+            @ApiResponse(
+                    responseCode = "400",
+                    description = "La cantidad solicitada no es válida o no existe capacidad suficiente.",
+                    content = @Content(
+                            schema = @Schema(
+                                    implementation = StandardErrorResponse.class
+                            )
+                    )
+            ),
+            @ApiResponse(
+                    responseCode = "401",
+                    description = "No existe una autenticación válida, el token ha expirado o no fue proporcionado.",
+                    content = @Content(
+                            schema = @Schema(
+                                    implementation = StandardErrorResponse.class
+                            )
+                    )
+            ),
+            @ApiResponse(
+                    responseCode = "404",
+                    description = "No se encontró el evento o la categoría de entrada indicada.",
+                    content = @Content(
+                            schema = @Schema(
+                                    implementation = StandardErrorResponse.class
+                            )
+                    )
+            )
+    })
+    ResponseEntity<StandardResponse<CapacityReservationResponse>> reserveCapacity(
+            @Parameter(
+                    description = "Identificador único del evento.",
+                    required = true
+            )
+            @PathVariable
+            UUID eventId,
+
+            @RequestBody
+            CapacityReservationRequest request
     );
 }

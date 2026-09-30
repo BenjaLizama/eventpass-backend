@@ -3,17 +3,22 @@ package cl.eventpass.ms_events.service.impl;
 import cl.eventpass.ms_events.dto.request.EventCreateRequest;
 import cl.eventpass.ms_events.dto.request.EventUpdateRequest;
 import cl.eventpass.ms_events.dto.request.TicketCategoryRequest;
+import cl.eventpass.ms_events.dto.response.CapacityReservationResponse;
 import cl.eventpass.ms_events.dto.response.EventResponse;
 import cl.eventpass.ms_events.entity.EventEntity;
 import cl.eventpass.ms_events.entity.TicketCategoryEntity;
 import cl.eventpass.ms_events.entity.VenueEntity;
 import cl.eventpass.ms_events.enums.EventCategory;
 import cl.eventpass.ms_events.enums.EventStatus;
+import cl.eventpass.ms_events.event.EventCancelledEvent;
+import cl.eventpass.ms_events.event.EventPublishedEvent;
 import cl.eventpass.ms_events.exception.InvalidRequestException;
 import cl.eventpass.ms_events.exception.ResourceConflictException;
 import cl.eventpass.ms_events.exception.ResourceNotFoundException;
 import cl.eventpass.ms_events.mapper.EventMapper;
+import cl.eventpass.ms_events.publisher.EventSqsPublisher;
 import cl.eventpass.ms_events.repository.EventRepository;
+import cl.eventpass.ms_events.repository.TicketCategoryRepository;
 import cl.eventpass.ms_events.repository.VenueRepository;
 import cl.eventpass.ms_events.service.EventService;
 import lombok.RequiredArgsConstructor;
@@ -36,6 +41,8 @@ public class EventServiceImpl implements EventService {
     private final EventRepository eventRepository;
     private final VenueRepository venueRepository;
     private final EventMapper eventMapper;
+    private final TicketCategoryRepository ticketCategoryRepository;
+    private final EventSqsPublisher eventSqsPublisher;
 
     @Override
     @Transactional
@@ -142,6 +149,25 @@ public class EventServiceImpl implements EventService {
 
     @Override
     @Transactional
+    public CapacityReservationResponse reserveCapacity(UUID eventId, UUID ticketCategoryId, int quantity) {
+        EventEntity event = eventRepository.findById(eventId)
+                .orElseThrow(() -> new ResourceNotFoundException("Evento no encontrado con ID: " + eventId));
+
+        if (event.getStatus() != EventStatus.PUBLISHED) {
+            throw new InvalidRequestException("Solo se puede reservar aforo para eventos publicados.");
+        }
+
+        int rowsUpdated = ticketCategoryRepository.decrementAvailableCapacity(eventId, ticketCategoryId, quantity);
+
+        if (rowsUpdated == 0) {
+            throw new InvalidRequestException("Sin aforo suficiente en la localidad seleccionada.");
+        }
+
+        return new CapacityReservationResponse(eventId, quantity, true);
+    }
+
+    @Override
+    @Transactional
     public EventResponse publishEvent(UUID eventId, UUID userId) {
         EventEntity event = getOrganizerEventWithPermission(eventId, userId);
 
@@ -150,7 +176,32 @@ public class EventServiceImpl implements EventService {
         }
 
         event.setStatus(EventStatus.PUBLISHED);
-        return eventMapper.toResponse(eventRepository.save(event));
+        EventEntity savedEvent = eventRepository.save(event);
+
+        var ticketPayloads = savedEvent.getTicketCategories().stream()
+                .map(tc -> new EventPublishedEvent.TicketCategoryPayload(
+                        tc.getId(),
+                        tc.getName(),
+                        tc.getPrice(),
+                        tc.getTotalCapacity()
+                ))
+                .toList();
+
+        EventPublishedEvent publishedEvent = new EventPublishedEvent(
+                savedEvent.getId(),
+                savedEvent.getTitle(),
+                savedEvent.getOrganizerId(),
+                savedEvent.getVenue().getId(),
+                savedEvent.getCategory(), // Enum EventCategory
+                savedEvent.getStartDate(),
+                savedEvent.getEndDate(),
+                ticketPayloads,
+                Instant.now()
+        );
+
+        eventSqsPublisher.publishEventPublished(publishedEvent);
+
+        return eventMapper.toResponse(savedEvent);
     }
 
     @Override
@@ -163,7 +214,20 @@ public class EventServiceImpl implements EventService {
         }
 
         event.setStatus(EventStatus.CANCELLED);
-        return eventMapper.toResponse(eventRepository.save(event));
+        EventEntity savedEvent = eventRepository.save(event);
+
+        // Construir el evento de cancelación
+        EventCancelledEvent cancelledEvent = new EventCancelledEvent(
+                savedEvent.getId(),
+                savedEvent.getTitle(),
+                savedEvent.getOrganizerId(),
+                Instant.now()
+        );
+
+        // Notificar asíncronamente vía SQS (LocalStack / AWS)
+        eventSqsPublisher.publishEventCancelled(cancelledEvent);
+
+        return eventMapper.toResponse(savedEvent);
     }
 
     private EventEntity getOrganizerEventWithPermission(UUID eventId, UUID userId) {

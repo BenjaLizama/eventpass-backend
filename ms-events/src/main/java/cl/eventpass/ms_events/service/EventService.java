@@ -2,6 +2,7 @@ package cl.eventpass.ms_events.service;
 
 import cl.eventpass.ms_events.dto.request.EventCreateRequest;
 import cl.eventpass.ms_events.dto.request.EventUpdateRequest;
+import cl.eventpass.ms_events.dto.response.CapacityReservationResponse;
 import cl.eventpass.ms_events.dto.response.EventResponse;
 import cl.eventpass.ms_events.enums.EventCategory;
 import org.springframework.data.domain.Page;
@@ -18,4 +19,5 @@ public interface EventService {
     EventResponse publishEvent(UUID eventId, UUID organizerId);
     EventResponse cancelEvent(UUID eventId, UUID organizerId);
     EventResponse updateEvent(UUID eventId, EventUpdateRequest request, UUID organizerId);
+    CapacityReservationResponse reserveCapacity(UUID eventId, UUID ticketCategoryId, int quantity);
 }

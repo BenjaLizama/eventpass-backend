@@ -2,8 +2,10 @@ package cl.eventpass.ms_events.controller;
 
 import cl.eventpass.ms_events.config.annotation.CurrentUserId;
 import cl.eventpass.ms_events.controller.docs.EventsControllerDocs;
+import cl.eventpass.ms_events.dto.request.CapacityReservationRequest;
 import cl.eventpass.ms_events.dto.request.EventCreateRequest;
 import cl.eventpass.ms_events.dto.request.EventUpdateRequest;
+import cl.eventpass.ms_events.dto.response.CapacityReservationResponse;
 import cl.eventpass.ms_events.dto.response.EventResponse;
 import cl.eventpass.ms_events.dto.response.StandardResponse;
 import cl.eventpass.ms_events.enums.EventCategory;
@@ -132,5 +134,18 @@ public class EventsController implements EventsControllerDocs {
                         "Evento cancelado con éxito.",
                         response
                 ));
+    }
+
+    @PatchMapping("/{eventId}/reserve")
+    public ResponseEntity<StandardResponse<CapacityReservationResponse>> reserveCapacity(
+            @PathVariable UUID eventId,
+            @Valid @RequestBody CapacityReservationRequest request
+    ) {
+        CapacityReservationResponse response = eventService.reserveCapacity(
+                eventId,
+                request.ticketCategoryId(),
+                request.quantity()
+        );
+        return ResponseEntity.ok(StandardResponse.ok("Aforo reservado con éxito.", response));
     }
 }

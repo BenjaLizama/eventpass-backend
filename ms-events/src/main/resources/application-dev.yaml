@@ -16,3 +16,18 @@ spring:
       hibernate:
         format_sql: true
         dialect: org.hibernate.dialect.PostgreSQLDialect
+  cloud:
+    aws:
+      region:
+        static: us-east-1
+      credentials:
+        access-key: test
+        secret-key: test
+      sqs:
+        endpoint: http://localhost:4566
+
+app:
+  sqs:
+    queues:
+      event-published: "eventpass-events-published-queue"
+      event-cancelled: "eventpass-events-cancelled-queue"

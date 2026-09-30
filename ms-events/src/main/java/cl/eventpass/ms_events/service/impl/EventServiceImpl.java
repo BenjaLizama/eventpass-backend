@@ -1,9 +1,11 @@
 package cl.eventpass.ms_events.service.impl;
 
 import cl.eventpass.ms_events.dto.request.EventCreateRequest;
+import cl.eventpass.ms_events.dto.request.EventUpdateRequest;
 import cl.eventpass.ms_events.dto.request.TicketCategoryRequest;
 import cl.eventpass.ms_events.dto.response.EventResponse;
 import cl.eventpass.ms_events.entity.EventEntity;
+import cl.eventpass.ms_events.entity.TicketCategoryEntity;
 import cl.eventpass.ms_events.entity.VenueEntity;
 import cl.eventpass.ms_events.enums.EventCategory;
 import cl.eventpass.ms_events.enums.EventStatus;
@@ -15,12 +17,16 @@ import cl.eventpass.ms_events.repository.EventRepository;
 import cl.eventpass.ms_events.repository.VenueRepository;
 import cl.eventpass.ms_events.service.EventService;
 import lombok.RequiredArgsConstructor;
-
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Instant;
+import java.util.Objects;
 import java.util.UUID;
 
 @Service
@@ -63,7 +69,6 @@ public class EventServiceImpl implements EventService {
     public EventResponse getEventById(UUID id) {
         EventEntity event = eventRepository.findActiveByIdWithDetails(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Evento no encontrado con ID: " + id));
-
         return eventMapper.toResponse(event);
     }
 
@@ -87,8 +92,53 @@ public class EventServiceImpl implements EventService {
 
     @Override
     @Transactional
-    public EventResponse publishEvent(UUID eventId, UUID organizerId) {
-        EventEntity event = getOrganizerEventWithPermission(eventId, organizerId);
+    public EventResponse updateEvent(UUID eventId, EventUpdateRequest request, UUID userId) {
+        EventEntity event = getOrganizerEventWithPermission(eventId, userId);
+
+        if (event.getStatus() == EventStatus.CANCELLED) {
+            throw new InvalidRequestException("No se puede modificar un evento cancelado.");
+        }
+
+        if (request.title() != null) event.setTitle(request.title());
+        if (request.description() != null) event.setDescription(request.description());
+        if (request.category() != null) event.setCategory(request.category());
+        if (request.bannerUrl() != null) event.setBannerUrl(request.bannerUrl());
+
+        if (request.startDate() != null || request.endDate() != null) {
+            Instant start = request.startDate() != null ? request.startDate() : event.getStartDate();
+            Instant end = request.endDate() != null ? request.endDate() : event.getEndDate();
+
+            if (end.isBefore(start)) {
+                throw new InvalidRequestException("La fecha de término debe ser posterior a la fecha de inicio.");
+            }
+            event.setStartDate(start);
+            event.setEndDate(end);
+        }
+
+        if (request.venueId() != null && !request.venueId().equals(event.getVenue().getId())) {
+            VenueEntity newVenue = venueRepository.findActiveById(request.venueId())
+                    .orElseThrow(() -> new ResourceNotFoundException("Recinto no encontrado con ID: " + request.venueId()));
+
+            int totalTicketsCapacity = event.getTicketCategories().stream()
+                    .mapToInt(TicketCategoryEntity::getTotalCapacity)
+                    .sum();
+
+            if (totalTicketsCapacity > newVenue.getCapacity()) {
+                throw new InvalidRequestException(String.format(
+                        "El aforo acumulado del evento (%d) supera la capacidad del nuevo recinto (%d).",
+                        totalTicketsCapacity, newVenue.getCapacity()
+                ));
+            }
+            event.setVenue(newVenue);
+        }
+
+        return eventMapper.toResponse(eventRepository.save(event));
+    }
+
+    @Override
+    @Transactional
+    public EventResponse publishEvent(UUID eventId, UUID userId) {
+        EventEntity event = getOrganizerEventWithPermission(eventId, userId);
 
         if (event.getStatus() == EventStatus.PUBLISHED) {
             throw new ResourceConflictException("El evento ya se encuentra publicado.");
@@ -100,8 +150,8 @@ public class EventServiceImpl implements EventService {
 
     @Override
     @Transactional
-    public EventResponse cancelEvent(UUID eventId, UUID organizerId) {
-        EventEntity event = getOrganizerEventWithPermission(eventId, organizerId);
+    public EventResponse cancelEvent(UUID eventId, UUID userId) {
+        EventEntity event = getOrganizerEventWithPermission(eventId, userId);
 
         if (event.getStatus() == EventStatus.CANCELLED) {
             throw new ResourceConflictException("El evento ya ha sido cancelado.");
@@ -111,12 +161,17 @@ public class EventServiceImpl implements EventService {
         return eventMapper.toResponse(eventRepository.save(event));
     }
 
-    private EventEntity getOrganizerEventWithPermission(UUID eventId, UUID organizerId) {
+    private EventEntity getOrganizerEventWithPermission(UUID eventId, UUID userId) {
         EventEntity event = eventRepository.findActiveByIdWithDetails(eventId)
                 .orElseThrow(() -> new ResourceNotFoundException("Evento no encontrado con ID: " + eventId));
 
-        if (!event.getOrganizerId().equals(organizerId)) {
-            throw new InvalidRequestException("No tienes permisos para modificar este evento.");
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+
+        boolean isAdmin = authentication != null && authentication.getAuthorities().stream()
+                .anyMatch(a -> Objects.equals(a.getAuthority(), "ROLE_ADMIN") || Objects.equals(a.getAuthority(), "ADMIN"));
+
+        if (!isAdmin && !event.getOrganizerId().equals(userId)) {
+            throw new AccessDeniedException("No tienes permisos para modificar este evento.");
         }
 
         return event;

@@ -2,6 +2,7 @@ package cl.eventpass.ms_events.config;
 
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
+import io.jsonwebtoken.io.Decoders;
 import io.jsonwebtoken.security.Keys;
 import jakarta.annotation.Nonnull;
 import jakarta.servlet.FilterChain;
@@ -10,15 +11,16 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.web.authentication.WebAuthenticationDetailsSource;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
-import java.io.IOException;
-import java.nio.charset.StandardCharsets;
-import java.util.Collections;
 import javax.crypto.SecretKey;
+import java.io.IOException;
+import java.util.Collections;
+import java.util.List;
 
 @Component
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
@@ -43,30 +45,65 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         final String jwt = authHeader.substring(7);
 
         try {
-            SecretKey key = Keys.hmacShaKeyFor(secretKey.getBytes(StandardCharsets.UTF_8));
-
-            Claims claims = Jwts.parser()
-                    .verifyWith(key)
-                    .build()
-                    .parseSignedClaims(jwt)
-                    .getPayload();
-
+            Claims claims = extractAllClaims(jwt);
             String userId = claims.getSubject();
 
-            if (userId != null && SecurityContextHolder.getContext().getAuthentication() == null) {
-                UsernamePasswordAuthenticationToken authToken = new UsernamePasswordAuthenticationToken(
-                        userId,
-                        null,
-                        Collections.emptyList()
+            if (userId != null
+                    && SecurityContextHolder.getContext().getAuthentication() == null) {
+
+                List<SimpleGrantedAuthority> grantedAuthorities =
+                        extractAuthorities(claims);
+
+                UsernamePasswordAuthenticationToken authentication =
+                        new UsernamePasswordAuthenticationToken(
+                                userId,
+                                null,
+                                grantedAuthorities
+                        );
+
+                authentication.setDetails(
+                        new WebAuthenticationDetailsSource()
+                                .buildDetails(request)
                 );
-                authToken.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
-                SecurityContextHolder.getContext().setAuthentication(authToken);
+
+                SecurityContextHolder.getContext()
+                        .setAuthentication(authentication);
             }
+
         } catch (Exception e) {
-            // Si el token es inválido o expiró, Spring Security manejará la denegación (401/403)
-            logger.error("Error al validar token JWT: " + e.getMessage());
+            logger.error(
+                    "Error al validar token JWT en ms-events: " + e.getMessage(),
+                    e
+            );
         }
 
         filterChain.doFilter(request, response);
+    }
+
+    private Claims extractAllClaims(String token) {
+        return Jwts.parser()
+                .verifyWith(getSignInKey())
+                .build()
+                .parseSignedClaims(token)
+                .getPayload();
+    }
+
+    private List<SimpleGrantedAuthority> extractAuthorities(Claims claims) {
+        Object authoritiesClaim = claims.get("authorities");
+
+        if (!(authoritiesClaim instanceof List<?> authorities)) {
+            return Collections.emptyList();
+        }
+
+        return authorities.stream()
+                .filter(String.class::isInstance)
+                .map(String.class::cast)
+                .map(SimpleGrantedAuthority::new)
+                .toList();
+    }
+
+    private SecretKey getSignInKey() {
+        byte[] keyBytes = Decoders.BASE64.decode(secretKey);
+        return Keys.hmacShaKeyFor(keyBytes);
     }
 }

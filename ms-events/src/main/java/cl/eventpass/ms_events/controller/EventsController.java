@@ -66,7 +66,7 @@ public class EventsController implements EventsControllerDocs {
         return ResponseEntity
                 .status(HttpStatus.OK)
                 .body(StandardResponse.ok(
-                        "Catálogo de eventos obtenido con éxito.",
+                        "Catálogo de eventos publicados obtenido con éxito.",
                         response
                 ));
     }

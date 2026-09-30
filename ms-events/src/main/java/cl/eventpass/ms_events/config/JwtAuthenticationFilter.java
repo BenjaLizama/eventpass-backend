@@ -46,10 +46,23 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
         try {
             Claims claims = extractAllClaims(jwt);
-            String userId = claims.getSubject();
 
-            if (userId != null
-                    && SecurityContextHolder.getContext().getAuthentication() == null) {
+            /*
+             * userId = identificador real del usuario.
+             *
+             * IMPORTANTE:
+             * sid corresponde al identificador de sesión y NO debe
+             * utilizarse como identidad del usuario.
+             */
+            String userId = claims.get("userId", String.class);
+
+            if (userId == null || userId.isBlank()) {
+                throw new IllegalArgumentException(
+                        "El JWT no contiene un userId válido."
+                );
+            }
+
+            if (SecurityContextHolder.getContext().getAuthentication() == null) {
 
                 List<SimpleGrantedAuthority> grantedAuthorities =
                         extractAuthorities(claims);
@@ -72,7 +85,8 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
         } catch (Exception e) {
             logger.error(
-                    "Error al validar token JWT en ms-events: " + e.getMessage(),
+                    "Error al validar token JWT en ms-events: "
+                            + e.getMessage(),
                     e
             );
         }
@@ -88,7 +102,9 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 .getPayload();
     }
 
-    private List<SimpleGrantedAuthority> extractAuthorities(Claims claims) {
+    private List<SimpleGrantedAuthority> extractAuthorities(
+            Claims claims
+    ) {
         Object authoritiesClaim = claims.get("authorities");
 
         if (!(authoritiesClaim instanceof List<?> authorities)) {

@@ -86,8 +86,18 @@ public class EventServiceImpl implements EventService {
     @Override
     @Transactional(readOnly = true)
     public Page<EventResponse> getOrganizerEvents(UUID organizerId, Pageable pageable) {
-        return eventRepository.findByOrganizerIdAndDeletedAtIsNull(organizerId, pageable)
-                .map(eventMapper::toResponse);
+
+        System.out.println("ORGANIZER ID CONSULTADO EN SERVICE: " + organizerId);
+
+        Page<EventEntity> events =
+                eventRepository.findByOrganizerIdAndDeletedAtIsNull(
+                        organizerId,
+                        pageable
+                );
+
+        System.out.println("EVENTOS ENCONTRADOS EN BD: " + events.getTotalElements());
+
+        return events.map(eventMapper::toResponse);
     }
 
     @Override

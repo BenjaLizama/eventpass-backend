@@ -45,6 +45,20 @@ public class JwtService {
         return extractClaim(token, Claims::getExpiration);
     }
 
+    public String extractUserId(String token) {
+        return extractClaim(
+                token,
+                claims -> claims.get("userId", String.class)
+        );
+    }
+
+    public String extractSessionId(String token) {
+        return extractClaim(
+                token,
+                claims -> claims.get("sid", String.class)
+        );
+    }
+
     public <T> T extractClaim(
             String token,
             Function<Claims, T> claimsResolver
@@ -55,6 +69,7 @@ public class JwtService {
 
     public String generateToken(
             UserDetails userDetails,
+            UUID userId,
             String sessionId
     ) {
         Map<String, Object> extraClaims = new HashMap<>();
@@ -67,17 +82,39 @@ public class JwtService {
                         .toList()
         );
 
-        extraClaims.put("sid", sessionId);
+        extraClaims.put(
+                "userId",
+                userId.toString()
+        );
 
-        return buildToken(extraClaims, userDetails, jwtExpiration);
+        extraClaims.put(
+                "sid",
+                sessionId
+        );
+
+        return buildToken(
+                extraClaims,
+                userDetails,
+                jwtExpiration
+        );
     }
 
     public String generateRefreshToken(
             UserDetails userDetails,
+            UUID userId,
             String sessionId
     ) {
         Map<String, Object> extraClaims = new HashMap<>();
-        extraClaims.put("sid", sessionId);
+
+        extraClaims.put(
+                "userId",
+                userId.toString()
+        );
+
+        extraClaims.put(
+                "sid",
+                sessionId
+        );
 
         return buildToken(
                 extraClaims,
@@ -91,12 +128,16 @@ public class JwtService {
             UserDetails userDetails,
             long expiration
     ) {
+        Date now = new Date();
+
         return Jwts.builder()
                 .claims(extraClaims)
                 .subject(userDetails.getUsername())
                 .id(UUID.randomUUID().toString())
-                .issuedAt(new Date(System.currentTimeMillis()))
-                .expiration(new Date(System.currentTimeMillis() + expiration))
+                .issuedAt(now)
+                .expiration(
+                        new Date(now.getTime() + expiration)
+                )
                 .signWith(getSignInKey())
                 .compact();
     }
@@ -130,9 +171,5 @@ public class JwtService {
     private SecretKey getSignInKey() {
         byte[] keyBytes = Decoders.BASE64.decode(secretKey);
         return Keys.hmacShaKeyFor(keyBytes);
-    }
-
-    public String extractSessionId(String token) {
-        return extractClaim(token, claims -> claims.get("sid", String.class));
     }
 }

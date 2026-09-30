@@ -3,6 +3,8 @@ package cl.eventpass.ms_events.exception;
 import cl.eventpass.ms_events.dto.response.StandardErrorResponse;
 import com.fasterxml.jackson.databind.exc.InvalidFormatException;
 import jakarta.servlet.http.HttpServletRequest;
+import org.springframework.dao.InvalidDataAccessApiUsageException;
+import org.springframework.data.core.PropertyReferenceException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
@@ -30,6 +32,21 @@ public class GlobalExceptionHandler {
           ex,
           request,
           null
+        );
+    }
+
+    @ExceptionHandler({InvalidDataAccessApiUsageException.class, PropertyReferenceException.class})
+    public ResponseEntity<StandardErrorResponse> handleInvalidSortProperty(
+            Exception ex,
+            HttpServletRequest request) {
+
+        return buildErrorResponse(
+                HttpStatus.BAD_REQUEST,
+                "INVALID_SORT_PROPERTY",
+                "El parámetro de ordenamiento o filtrado es inválido o hace referencia a una propiedad inexistente.",
+                ex,
+                request,
+                null
         );
     }
 

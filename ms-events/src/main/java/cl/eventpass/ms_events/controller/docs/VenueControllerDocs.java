@@ -16,8 +16,8 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.RequestBody;
 
 import java.util.UUID;
 
@@ -30,7 +30,7 @@ public interface VenueControllerDocs {
     @Operation(
             summary = "Crear recinto",
             description = "Crea un nuevo recinto dentro del sistema. "
-                    + "Esta operación requiere autenticación y puede ser ejecutada por usuarios "
+                    + "La operación requiere autenticación y puede ser ejecutada por usuarios "
                     + "con los roles ADMIN u ORGANIZER."
     )
     @SecurityRequirement(name = "bearerAuth")
@@ -59,7 +59,7 @@ public interface VenueControllerDocs {
             ),
             @ApiResponse(
                     responseCode = "403",
-                    description = "El usuario autenticado no posee los permisos necesarios para crear recintos.",
+                    description = "El usuario autenticado no posee los roles ADMIN u ORGANIZER.",
                     content = @Content(
                             schema = @Schema(
                                     implementation = StandardErrorResponse.class
@@ -75,7 +75,8 @@ public interface VenueControllerDocs {
 
     @Operation(
             summary = "Obtener recinto por ID",
-            description = "Obtiene la información de un recinto específico utilizando su identificador único."
+            description = "Obtiene la información de un recinto activo utilizando su identificador único. "
+                    + "Los recintos eliminados lógicamente no son considerados."
     )
     @ApiResponses({
             @ApiResponse(
@@ -84,7 +85,7 @@ public interface VenueControllerDocs {
             ),
             @ApiResponse(
                     responseCode = "404",
-                    description = "No se encontró un recinto asociado al identificador proporcionado.",
+                    description = "No se encontró un recinto activo asociado al identificador proporcionado.",
                     content = @Content(
                             schema = @Schema(
                                     implementation = StandardErrorResponse.class
@@ -103,8 +104,9 @@ public interface VenueControllerDocs {
 
 
     @Operation(
-            summary = "Obtener recintos",
-            description = "Obtiene una lista paginada de recintos disponibles. "
+            summary = "Obtener todos los recintos",
+            description = "Obtiene una lista paginada de todos los recintos activos. "
+                    + "Los recintos eliminados lógicamente son excluidos de los resultados. "
                     + "Por defecto se retornan 10 registros por página y los resultados "
                     + "se ordenan por nombre de forma ascendente."
     )
@@ -115,7 +117,10 @@ public interface VenueControllerDocs {
             )
     })
     ResponseEntity<StandardResponse<Page<VenueResponse>>> getAllVenues(
-            @PageableDefault(size = 10, sort = "name")
+            @PageableDefault(
+                    size = 10,
+                    sort = "name"
+            )
             Pageable pageable
     );
 
@@ -123,7 +128,8 @@ public interface VenueControllerDocs {
     @Operation(
             summary = "Actualizar recinto",
             description = "Actualiza la información de un recinto existente. "
-                    + "Esta operación requiere autenticación y permisos de administrador."
+                    + "La operación requiere autenticación y permisos de administrador. "
+                    + "El recinto debe existir y encontrarse activo."
     )
     @SecurityRequirement(name = "bearerAuth")
     @ApiResponses({
@@ -160,7 +166,7 @@ public interface VenueControllerDocs {
             ),
             @ApiResponse(
                     responseCode = "404",
-                    description = "No se encontró el recinto asociado al identificador proporcionado.",
+                    description = "No se encontró un recinto activo asociado al identificador proporcionado.",
                     content = @Content(
                             schema = @Schema(
                                     implementation = StandardErrorResponse.class
@@ -183,8 +189,10 @@ public interface VenueControllerDocs {
 
     @Operation(
             summary = "Eliminar recinto",
-            description = "Elimina un recinto existente utilizando su identificador único. "
-                    + "Esta operación requiere autenticación y permisos de administrador."
+            description = "Elimina lógicamente un recinto existente. "
+                    + "La operación requiere autenticación y permisos de administrador. "
+                    + "El recinto no es eliminado físicamente de la base de datos, "
+                    + "sino que se registra la fecha de eliminación."
     )
     @SecurityRequirement(name = "bearerAuth")
     @ApiResponses({
@@ -212,7 +220,7 @@ public interface VenueControllerDocs {
             ),
             @ApiResponse(
                     responseCode = "404",
-                    description = "No se encontró el recinto asociado al identificador proporcionado.",
+                    description = "No se encontró un recinto activo asociado al identificador proporcionado.",
                     content = @Content(
                             schema = @Schema(
                                     implementation = StandardErrorResponse.class

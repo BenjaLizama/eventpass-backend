@@ -21,7 +21,7 @@ public interface EventRepository extends JpaRepository<EventEntity, UUID> {
     // Carga ansiosa de Venue y TicketCategories en una sola consulta SQL.
     @EntityGraph(attributePaths = {"venue", "ticketCategories"})
     @Query("SELECT e FROM EventEntity e WHERE e.id = :id AND e.deletedAt IS NULL")
-    Optional<EventEntity> findActiveByIdWhitDetails(@Param("id") UUID id);
+    Optional<EventEntity> findActiveByIdWithDetails(@Param("id") UUID id);
 
     // Busqueda para el catalogo publico (solo eventos en estado PUBLISHED)
     @EntityGraph(attributePaths = {"venue"})

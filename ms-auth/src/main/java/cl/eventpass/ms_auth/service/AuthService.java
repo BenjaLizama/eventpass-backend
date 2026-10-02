@@ -114,10 +114,16 @@ public class AuthService {
                 )
         );
 
-        UserDetails user =
-                userDetailsService.loadUserByUsername(request.email());
+        CredentialEntity credential =
+                credentialRepository.findByEmailAndDeletedAtIsNull(
+                        request.email()
+                ).orElseThrow(() ->
+                        new ResourceNotFoundException(
+                                "No se encontró el usuario solicitado."
+                        )
+                );
 
-        return createAuthResponse(user);
+        return createAuthResponse(credential);
     }
 
     public AuthResponse refreshToken(RefreshTokenRequest request) {
@@ -140,8 +146,15 @@ public class AuthService {
             );
         }
 
-        UserDetails userDetails =
-                userDetailsService.loadUserByUsername(userEmail);
+        CredentialEntity credential =
+                credentialRepository.findByEmailAndDeletedAtIsNull(userEmail)
+                        .orElseThrow(() ->
+                                new InvalidTokenException(
+                                        "El usuario asociado al refresh token no existe."
+                                )
+                        );
+
+        UserDetails userDetails = credential;
 
         String sessionId;
 
@@ -174,6 +187,7 @@ public class AuthService {
         String newAccessToken =
                 jwtService.generateToken(
                         userDetails,
+                        credential.getId(),
                         sessionId
                 );
 
@@ -241,25 +255,31 @@ public class AuthService {
         sessionService.revokeSession(sessionId);
     }
 
-    private AuthResponse createAuthResponse(UserDetails user) {
+    private AuthResponse createAuthResponse(
+            CredentialEntity credential
+    ) {
 
         String sessionId =
                 UUID.randomUUID().toString();
 
         sessionService.createSession(
                 sessionId,
-                user.getUsername()
+                credential.getUsername()
         );
+
+        UserDetails userDetails = credential;
 
         String accessToken =
                 jwtService.generateToken(
-                        user,
+                        userDetails,
+                        credential.getId(),
                         sessionId
                 );
 
         String refreshToken =
                 jwtService.generateRefreshToken(
-                        user,
+                        userDetails,
+                        credential.getId(),
                         sessionId
                 );
 

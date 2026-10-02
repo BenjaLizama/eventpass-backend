@@ -42,6 +42,6 @@ public class OrderEntity extends BaseEntity {
     @Column(name = "payment_status", nullable = false, length = 20)
     private PaymentStatus paymentStatus;
 
-    @Column(name = "expired_at", nullable = false)
+    @Column(name = "expires_at", nullable = false)
     private Instant expiresAt;
 }

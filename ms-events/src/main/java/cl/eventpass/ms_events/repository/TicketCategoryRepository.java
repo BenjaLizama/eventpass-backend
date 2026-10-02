@@ -28,6 +28,17 @@ public interface TicketCategoryRepository extends JpaRepository<TicketCategoryEn
             @Param("quantity") int quantity
     );
 
+    @Modifying
+    @Query("""
+        UPDATE TicketCategoryEntity t
+        SET t.availableCapacity = t.availableCapacity + :quantity
+        WHERE t.id = :ticketCategoryId
+        """)
+    int incrementAvailableCapacity(
+            @Param("ticketCategoryId") UUID ticketCategoryId,
+            @Param("quantity") int quantity
+    );
+
     List<Optional<TicketCategoryEntity>> findByEventIdAndDeletedAtIsNull(UUID eventId);
 
     Optional<TicketCategoryEntity> findByIdAndDeletedAtIsNull(UUID id);

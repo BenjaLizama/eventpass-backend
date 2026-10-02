@@ -1,6 +1,6 @@
 spring:
   application:
-    name: ms-events
+    name: ms-orders
 
   profiles:
     active: ${SPRING_PROFILES_ACTIVE:dev}
@@ -8,6 +8,9 @@ spring:
   threads:
     virtual:
       enabled: true
+
+  jpa:
+    open-in-view: false
 
 application:
   security:

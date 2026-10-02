@@ -142,7 +142,7 @@ services:
     restart: unless-stopped
 
     environment:
-      SPRING_PROFILES_ACTIVE: dev
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE}
 
       AUTH_DB_URL: jdbc:postgresql://postgres-auth:5432/${POSTGRES_AUTH_DB}
       AUTH_DB_USERNAME: ${POSTGRES_AUTH_USER}
@@ -178,7 +178,7 @@ services:
     restart: unless-stopped
 
     environment:
-      SPRING_PROFILES_ACTIVE: dev
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE}
 
       EVENTS_DB_URL: jdbc:postgresql://postgres-events:5432/${POSTGRES_EVENTS_DB}
       EVENTS_DB_USERNAME: ${POSTGRES_EVENTS_USER}
@@ -207,26 +207,26 @@ services:
     networks:
       - eventpass
 
-  # ================================================
-  #  VOLUMES
-  # ================================================
-  volumes:
-    postgres_auth_data:
-      name: eventpass_postgres_auth_data
+# ================================================
+#  VOLUMES
+# ================================================
+volumes:
+  postgres_auth_data:
+    name: eventpass_postgres_auth_data
 
-    postgres_events_data:
-      name: eventpass_postgres_events_data
+  postgres_events_data:
+    name: eventpass_postgres_events_data
 
-    redis_data:
-      name: eventpass_redis_data
+  redis_data:
+    name: eventpass_redis_data
 
-    localstack_data:
-      name: eventpass_localstack_data
+  localstack_data:
+    name: eventpass_localstack_data
 
-  # ================================================
-  #  NETWORK
-  # ================================================
-  networks:
-    eventpass:
-      name: eventpass_network
-      driver: bridge
+# ================================================
+#  NETWORK
+# ================================================
+networks:
+  eventpass:
+    name: eventpass_network
+    driver: bridge

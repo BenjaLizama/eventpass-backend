@@ -10,7 +10,6 @@
 !**/src/test/**/build/
 
 # Archivos de entorno y secretos local
-*.env
 .env
 
 # Archivos subidos o temporales

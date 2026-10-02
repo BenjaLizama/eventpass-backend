@@ -1,57 +1,232 @@
-version: '3.8'
-
 services:
+  # ================================================
+  #  DATA - MS-AUTH
+  # ================================================
   postgres-auth:
     image: postgres:16-alpine
-    container_name: eventpass-postgres-auth
-    restart: always
+    restart: unless-stopped
+
     environment:
-      POSTGRES_DB: eventpass_auth
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgrespassword
+      POSTGRES_DB: ${POSTGRES_AUTH_DB}
+      POSTGRES_USER: ${POSTGRES_AUTH_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_AUTH_PASSWORD}
+
     ports:
-      - "5432:5432"
+      - "${POSTGRES_AUTH_PORT}:5432"
+
     volumes:
       - postgres_auth_data:/var/lib/postgresql/data
 
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U ${POSTGRES_AUTH_USER} -d ${POSTGRES_AUTH_DB}"
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+    networks:
+      - eventpass
+
+  # ================================================
+  #  DATA - MS-EVENTS
+  # ================================================
   postgres-events:
     image: postgres:16-alpine
-    container_name: eventpass-postgres-events
-    restart: always
+    restart: unless-stopped
+
     environment:
-      POSTGRES_DB: eventpass_events
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgrespassword
+      POSTGRES_DB: ${POSTGRES_EVENTS_DB}
+      POSTGRES_USER: ${POSTGRES_EVENTS_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_EVENTS_PASSWORD}
+
     ports:
-      - "5433:5432"
+      - "${POSTGRES_EVENTS_PORT}:5432"
+
     volumes:
       - postgres_events_data:/var/lib/postgresql/data
 
-  # Emulador de AWS SQS para entorno local
-  localstack:
-    image: localstack/localstack:3.4.0
-    container_name: localstack-eventpass
-    ports:
-      - "4566:4566"
-    environment:
-      - AWS_DEFAULT_REGION=us-east-1
-    volumes:
-      - ./scripts:/etc/localstack/init/ready.d
-
-  redis:
-    image: redis:7-alpine
-    container_name: eventpass-redis
-    ports:
-      - "6379:6379"
-    volumes:
-      - redis_data:/data
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U ${POSTGRES_EVENTS_USER} -d ${POSTGRES_EVENTS_DB}"
+        ]
       interval: 5s
       timeout: 5s
-      retries: 5
+      retries: 10
+      start_period: 10s
 
-volumes:
-  postgres_auth_data:
-  postgres_events_data:
-  redis_data:
+    networks:
+      - eventpass
+
+  # ================================================
+  #  REDIS
+  # ================================================
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+
+    command:
+      - redis-server
+      - --appendonly
+      - "yes"
+
+    ports:
+      - "${REDIS_PORT}:6379"
+
+    volumes:
+      - redis_data:/data
+
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "redis-cli",
+          "ping"
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 5s
+
+    networks:
+      - eventpass
+
+  # ================================================
+  #  LOCALSTACK
+  # ================================================
+  localstack:
+    image: localstack/localstack:3.4.0
+    restart: unless-stopped
+
+    environment:
+      AWS_DEFAULT_REGION: ${AWS_REGION}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
+
+    ports:
+      - "${LOCALSTACK_PORT}:4566"
+
+    volumes:
+      - localstack_data:/var/lib/localstack
+      - ./scripts/localstack:/etc/localstack/init/ready.d
+
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "curl",
+          "-f",
+          "http://localhost:4566/_localstack/health"
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+
+    networks:
+      - eventpass
+
+  # ================================================
+  #  MS-AUTH
+  # ================================================
+  ms-auth:
+    build:
+      context: ./ms-auth
+      dockerfile: Dockerfile
+
+    restart: unless-stopped
+
+    environment:
+      SPRING_PROFILES_ACTIVE: dev
+
+      AUTH_DB_URL: jdbc:postgresql://postgres-auth:5432/${POSTGRES_AUTH_DB}
+      AUTH_DB_USERNAME: ${POSTGRES_AUTH_USER}
+      AUTH_DB_PASSWORD: ${POSTGRES_AUTH_PASSWORD}
+
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+
+      AWS_REGION: ${AWS_REGION}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
+
+    ports:
+      - "8082:8082"
+
+    depends_on:
+      postgres-auth:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+    networks:
+      - eventpass
+
+  # ================================================
+  #  MS-EVENTS
+  # ================================================
+  ms-events:
+    build:
+      context: ./ms-events
+      dockerfile: Dockerfile
+
+    restart: unless-stopped
+
+    environment:
+      SPRING_PROFILES_ACTIVE: dev
+
+      EVENTS_DB_URL: jdbc:postgresql://postgres-events:5432/${POSTGRES_EVENTS_DB}
+      EVENTS_DB_USERNAME: ${POSTGRES_EVENTS_USER}
+      EVENTS_DB_PASSWORD: ${POSTGRES_EVENTS_PASSWORD}
+
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+
+      AWS_REGION: ${AWS_REGION}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
+
+      AWS_SQS_ENDPOINT: http://localstack:4566
+
+    ports:
+      - "8083:8083"
+
+    depends_on:
+      postgres-events:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      localstack:
+        condition: service_healthy
+
+    networks:
+      - eventpass
+
+  # ================================================
+  #  VOLUMES
+  # ================================================
+  volumes:
+    postgres_auth_data:
+      name: eventpass_postgres_auth_data
+
+    postgres_events_data:
+      name: eventpass_postgres_events_data
+
+    redis_data:
+      name: eventpass_redis_data
+
+    localstack_data:
+      name: eventpass_localstack_data
+
+  # ================================================
+  #  NETWORK
+  # ================================================
+  networks:
+    eventpass:
+      name: eventpass_network
+      driver: bridge

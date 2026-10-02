@@ -156,7 +156,7 @@ services:
       AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
 
     ports:
-      - "8082:8082"
+      - "8081:8081"
 
     depends_on:
       postgres-auth:
@@ -194,7 +194,7 @@ services:
       AWS_SQS_ENDPOINT: http://localstack:4566
 
     ports:
-      - "8083:8083"
+      - "8082:8082"
 
     depends_on:
       postgres-events:

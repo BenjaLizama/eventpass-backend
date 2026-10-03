@@ -9,6 +9,7 @@ import cl.eventpass.ms_auth.dto.response.AuthResponse;
 import cl.eventpass.ms_auth.exception.EmailAlreadyExistsException;
 import cl.eventpass.ms_auth.dto.request.LoginRequest;
 import cl.eventpass.ms_auth.exception.ResourceNotFoundException;
+import cl.eventpass.ms_auth.exception.InvalidTokenException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -18,7 +19,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.crypto.password.PasswordEncoder;
-
+import java.util.Date;
 import java.util.Optional;
 import java.util.UUID;
 import static org.junit.jupiter.api.Assertions.*;
@@ -265,6 +266,139 @@ class AuthServiceTest {
                 .findByEmailAndDeletedAtIsNull("inexistente@test.com");
 
         verifyNoInteractions(jwtService, sessionService);
+    }
+    @Test
+    void logout_WhenAuthorizationHeaderIsNull_ThrowsInvalidTokenException() {
+        // Act and Assert
+        assertThrows(
+                InvalidTokenException.class,
+                () -> authService.logout(null)
+        );
+
+        verifyNoInteractions(
+                jwtService,
+                sessionService,
+                tokenBlacklistService
+        );
+
+    }
+    @Test
+    void logout_WhenAuthorizationHeaderHasInvalidFormat_ThrowsInvalidTokenException() {
+        // Act and Assert
+        assertThrows(
+                InvalidTokenException.class,
+                () -> authService.logout("Basic token-invalid")
+        );
+
+        verifyNoInteractions(
+                jwtService,
+                sessionService,
+                tokenBlacklistService
+        );
+    }
+    @Test
+    void logout_WhenTokenIsValid_BlacklistsTokenAndRevokesSession() {
+        // Arrange
+        String jwt = "jwt-valido";
+        String authHeader = "Bearer " + jwt;
+        String jti = "token-id-123";
+        String sessionId = "session-id-123";
+
+        Date expiration = new Date(
+                System.currentTimeMillis() + 60_000
+        );
+
+        when(jwtService.extractJti(jwt))
+                .thenReturn(jti);
+
+        when(jwtService.extractSessionId(jwt))
+                .thenReturn(sessionId);
+
+        when(jwtService.extractExpiration(jwt))
+                .thenReturn(expiration);
+
+        when(sessionService.isSessionActive(sessionId))
+                .thenReturn(true);
+
+        // Act
+        authService.logout(authHeader);
+
+        // Assert
+        verify(jwtService).extractJti(jwt);
+        verify(jwtService).extractSessionId(jwt);
+        verify(jwtService).extractExpiration(jwt);
+
+        verify(sessionService)
+                .isSessionActive(sessionId);
+
+        verify(tokenBlacklistService)
+                .blacklistToken(
+                        eq(jti),
+                        longThat(value -> value > 0)
+                );
+
+        verify(sessionService)
+                .revokeSession(sessionId);
+    }
+    @Test
+    void logout_WhenSessionIsInactive_ThrowsInvalidTokenException() {
+        // Arrange
+        String jwt = "jwt-valido";
+        String authHeader = "Bearer " + jwt;
+        String jti = "token-id-123";
+        String sessionId = "session-id-123";
+
+        Date expiration = new Date(
+                System.currentTimeMillis() + 60_000
+        );
+
+        when(jwtService.extractJti(jwt))
+                .thenReturn(jti);
+
+        when(jwtService.extractSessionId(jwt))
+                .thenReturn(sessionId);
+
+        when(jwtService.extractExpiration(jwt))
+                .thenReturn(expiration);
+
+        when(sessionService.isSessionActive(sessionId))
+                .thenReturn(false);
+
+        // Act and Assert
+        assertThrows(
+                InvalidTokenException.class,
+                () -> authService.logout(authHeader)
+        );
+
+        verify(sessionService)
+                .isSessionActive(sessionId);
+
+        verifyNoInteractions(tokenBlacklistService);
+
+        verify(sessionService, never())
+                .revokeSession(anyString());
+    }
+    @Test
+    void logout_WhenTokenHasNoJti_ThrowsInvalidTokenException() {
+        // Arrange
+        String jwt = "jwt-sin-jti";
+
+        when(jwtService.extractJti(jwt))
+                .thenReturn(null);
+
+        when(jwtService.extractSessionId(jwt))
+                .thenReturn("session-id-123");
+
+        when(jwtService.extractExpiration(jwt))
+                .thenReturn(new Date(System.currentTimeMillis() + 60_000));
+
+        // Act and Assert
+        assertThrows(
+                InvalidTokenException.class,
+                () -> authService.logout("Bearer " + jwt)
+        );
+
+        verifyNoInteractions(sessionService, tokenBlacklistService);
     }
 
 }

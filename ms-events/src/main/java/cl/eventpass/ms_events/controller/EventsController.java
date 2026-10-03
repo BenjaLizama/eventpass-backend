@@ -138,6 +138,7 @@ public class EventsController implements EventsControllerDocs {
                 ));
     }
 
+    @Override
     @PatchMapping("/{eventId}/reserve")
     @PreAuthorize("hasRole('INTERNAL_SERVICE')")
     public ResponseEntity<StandardResponse<CapacityReservationResponse>> reserveCapacity(
@@ -152,6 +153,7 @@ public class EventsController implements EventsControllerDocs {
         return ResponseEntity.ok(StandardResponse.ok("Aforo reservado con éxito.", response));
     }
 
+    @Override
     @PatchMapping("/{eventId}/release")
     @PreAuthorize("hasRole('INTERNAL_SERVICE')")
     public ResponseEntity<StandardResponse<CapacityReleaseResponse>> releaseCapacity(

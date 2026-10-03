@@ -12,7 +12,6 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
-import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -28,10 +27,21 @@ public interface OrderControllerDocs {
 
     @Operation(
             summary = "Crear orden",
-            description = "Crea una nueva orden de compra para una categoría de ticket. "
-                    + "El usuario autenticado se obtiene desde el token JWT. "
-                    + "El precio de la categoría se obtiene desde ms-events y el aforo "
-                    + "se reserva antes de crear la orden."
+            description = """
+                    Crea una nueva orden de compra para una categoría de ticket.
+
+                    El usuario autenticado se identifica mediante el JWT enviado
+                    en la solicitud. La identidad del usuario se obtiene mediante
+                    @CurrentUserId.
+
+                    Antes de persistir la orden, ms-orders consulta la categoría
+                    de ticket en ms-events, valida el límite de compra por usuario
+                    y solicita la reserva del aforo mediante autenticación
+                    interna entre microservicios.
+
+                    Si la reserva de aforo es exitosa, se crea la orden en estado
+                    PENDING y con estado de pago PENDING.
+                    """
     )
     @ApiResponses({
             @ApiResponse(
@@ -40,8 +50,7 @@ public interface OrderControllerDocs {
             ),
             @ApiResponse(
                     responseCode = "400",
-                    description = "Los datos de la solicitud son inválidos o la cantidad "
-                            + "solicitada supera el máximo permitido por usuario.",
+                    description = "Los datos de la solicitud son inválidos o la cantidad solicitada supera el máximo permitido por usuario.",
                     content = @Content(
                             schema = @Schema(
                                     implementation = StandardErrorResponse.class
@@ -50,7 +59,7 @@ public interface OrderControllerDocs {
             ),
             @ApiResponse(
                     responseCode = "401",
-                    description = "El usuario no está autenticado.",
+                    description = "El usuario no está autenticado o el token JWT no es válido.",
                     content = @Content(
                             schema = @Schema(
                                     implementation = StandardErrorResponse.class
@@ -77,7 +86,7 @@ public interface OrderControllerDocs {
             ),
             @ApiResponse(
                     responseCode = "500",
-                    description = "Ocurrió un error al procesar la creación de la orden.",
+                    description = "Ocurrió un error interno al procesar la creación de la orden.",
                     content = @Content(
                             schema = @Schema(
                                     implementation = StandardErrorResponse.class
@@ -93,6 +102,10 @@ public interface OrderControllerDocs {
             @Valid
             @RequestBody OrderCreateRequest request,
 
+            @Parameter(
+                    description = "UUID del usuario autenticado obtenido desde el JWT.",
+                    required = true
+            )
             UUID userId
     );
 }

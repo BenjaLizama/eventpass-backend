@@ -1,5 +1,6 @@
 package cl.eventpass.ms_auth.controller;
 
+import cl.eventpass.ms_auth.controller.docs.ServiceAuthenticationControllerDocs;
 import cl.eventpass.ms_auth.dto.request.ServiceTokenRequest;
 import cl.eventpass.ms_auth.dto.response.ServiceTokenResponse;
 import cl.eventpass.ms_auth.dto.response.StandardResponse;
@@ -12,10 +13,11 @@ import org.springframework.web.bind.annotation.*;
 @RestController
 @RequestMapping("/api/v1/auth")
 @RequiredArgsConstructor
-public class ServiceAuthenticationController {
+public class ServiceAuthenticationController implements ServiceAuthenticationControllerDocs {
 
     private final ServiceAuthenticationService serviceAuthenticationService;
 
+    @Override
     @PostMapping("/service-token")
     public ResponseEntity<StandardResponse<ServiceTokenResponse>> generateToken(
             @Valid @RequestBody ServiceTokenRequest request

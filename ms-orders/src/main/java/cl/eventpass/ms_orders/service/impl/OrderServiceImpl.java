@@ -11,6 +11,7 @@ import cl.eventpass.ms_orders.entity.OrderEntity;
 import cl.eventpass.ms_orders.entity.OrderItemEntity;
 import cl.eventpass.ms_orders.enums.OrderStatus;
 import cl.eventpass.ms_orders.enums.PaymentStatus;
+import cl.eventpass.ms_orders.exception.InvalidRequestException;
 import cl.eventpass.ms_orders.repository.OrderItemRepository;
 import cl.eventpass.ms_orders.repository.OrderRepository;
 import cl.eventpass.ms_orders.service.OrderService;
@@ -41,7 +42,6 @@ public class OrderServiceImpl implements OrderService {
             UUID userId,
             String token
     ) {
-        System.out.println(">>> TOKEN ENVIADO A MS-EVENTS: " + token);
 
         TicketCategoryResponse category =
                 eventsClient.getTicketCategory(
@@ -50,10 +50,31 @@ public class OrderServiceImpl implements OrderService {
                         token
                 );
 
-        if (request.quantity() > category.maxPerUser()) {
-            throw new IllegalArgumentException(
+        orderItemRepository.acquirePurchaseLock(
+                userId,
+                request.ticketCategoryId()
+        );
+
+        Long currentQuantity =
+                orderItemRepository.sumQuantityByUserAndTicketCategory(
+                        userId,
+                        request.ticketCategoryId(),
+                        List.of(
+                                OrderStatus.PENDING,
+                                OrderStatus.PAID
+                        )
+                );
+
+        long totalRequested =
+                currentQuantity + request.quantity();
+
+        if (totalRequested > category.maxPerUser()) {
+            throw new InvalidRequestException(
                     "La cantidad solicitada supera el máximo permitido "
-                            + "por usuario para esta categoría."
+                            + "por usuario para esta categoría. "
+                            + "Cantidad actual: " + currentQuantity
+                            + ", cantidad solicitada: " + request.quantity()
+                            + ", máximo permitido: " + category.maxPerUser()
             );
         }
 
@@ -72,6 +93,7 @@ public class OrderServiceImpl implements OrderService {
         boolean capacityReserved = false;
 
         try {
+
             eventsClient.reserveCapacity(
                     request.eventId(),
                     reservationRequest,
@@ -87,24 +109,26 @@ public class OrderServiceImpl implements OrderService {
                                     ChronoUnit.MINUTES
                             );
 
-            OrderEntity order = OrderEntity.builder()
-                    .userId(userId)
-                    .totalAmount(totalAmount)
-                    .status(OrderStatus.PENDING)
-                    .paymentStatus(PaymentStatus.PENDING)
-                    .expiresAt(expiresAt)
-                    .build();
+            OrderEntity order =
+                    OrderEntity.builder()
+                            .userId(userId)
+                            .totalAmount(totalAmount)
+                            .status(OrderStatus.PENDING)
+                            .paymentStatus(PaymentStatus.PENDING)
+                            .expiresAt(expiresAt)
+                            .build();
 
             OrderEntity savedOrder =
                     orderRepository.saveAndFlush(order);
 
-            OrderItemEntity orderItem = OrderItemEntity.builder()
-                    .orderId(savedOrder.getId())
-                    .eventId(request.eventId())
-                    .ticketCategoryId(request.ticketCategoryId())
-                    .quantity(request.quantity())
-                    .unitPrice(category.price())
-                    .build();
+            OrderItemEntity orderItem =
+                    OrderItemEntity.builder()
+                            .orderId(savedOrder.getId())
+                            .eventId(request.eventId())
+                            .ticketCategoryId(request.ticketCategoryId())
+                            .quantity(request.quantity())
+                            .unitPrice(category.price())
+                            .build();
 
             OrderItemEntity savedItem =
                     orderItemRepository.saveAndFlush(orderItem);
@@ -137,7 +161,9 @@ public class OrderServiceImpl implements OrderService {
         } catch (RuntimeException exception) {
 
             if (capacityReserved) {
+
                 try {
+
                     CapacityReleaseRequest releaseRequest =
                             new CapacityReleaseRequest(
                                     request.ticketCategoryId(),
@@ -151,7 +177,10 @@ public class OrderServiceImpl implements OrderService {
                     );
 
                 } catch (RuntimeException releaseException) {
-                    exception.addSuppressed(releaseException);
+
+                    exception.addSuppressed(
+                            releaseException
+                    );
                 }
             }
 

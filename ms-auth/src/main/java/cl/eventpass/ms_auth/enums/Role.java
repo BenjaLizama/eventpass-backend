@@ -55,7 +55,9 @@ public enum Role {
             Permission.TICKET_REFUND,
             Permission.ANALYTICS_READ,
             Permission.SYSTEM_CONFIG
-    ));
+    )),
+
+    INTERNAL_SERVICE(Set.of());
 
     @Getter
     private final Set<Permission> permissions;

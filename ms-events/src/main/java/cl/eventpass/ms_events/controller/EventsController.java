@@ -139,7 +139,7 @@ public class EventsController implements EventsControllerDocs {
     }
 
     @PatchMapping("/{eventId}/reserve")
-    @PreAuthorize("hasRole('CUSTOMER')")
+    @PreAuthorize("hasRole('INTERNAL_SERVICE')")
     public ResponseEntity<StandardResponse<CapacityReservationResponse>> reserveCapacity(
             @PathVariable UUID eventId,
             @Valid @RequestBody CapacityReservationRequest request
@@ -153,7 +153,7 @@ public class EventsController implements EventsControllerDocs {
     }
 
     @PatchMapping("/{eventId}/release")
-    @PreAuthorize("hasRole('CUSTOMER')")
+    @PreAuthorize("hasRole('INTERNAL_SERVICE')")
     public ResponseEntity<StandardResponse<CapacityReleaseResponse>> releaseCapacity(
             @PathVariable UUID eventId,
             @Valid @RequestBody CapacityReleaseRequest request

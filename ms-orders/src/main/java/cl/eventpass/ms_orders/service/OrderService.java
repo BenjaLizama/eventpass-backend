@@ -6,5 +6,5 @@ import cl.eventpass.ms_orders.dto.response.OrderResponse;
 import java.util.UUID;
 
 public interface OrderService {
-    OrderResponse createOrder(OrderCreateRequest request, UUID userId, String token);
+    OrderResponse createOrder(OrderCreateRequest request, UUID userId);
 }

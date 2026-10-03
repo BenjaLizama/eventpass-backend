@@ -280,13 +280,19 @@ services:
       AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
       AWS_SQS_ENDPOINT: http://localstack:4566
 
+      AUTH_SERVICE_URL: http://ms-auth:8081
       EVENTS_SERVICE_URL: http://ms-events:8082
+
+      MS_ORDERS_CLIENT_ID: ${MS_ORDERS_CLIENT_ID}
+      MS_ORDERS_CLIENT_SECRET: ${MS_ORDERS_CLIENT_SECRET}
 
     ports:
       - "8083:8083"
 
     depends_on:
       postgres-orders:
+        condition: service_healthy
+      ms-auth:
         condition: service_healthy
       ms-events:
         condition: service_healthy

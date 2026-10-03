@@ -39,15 +39,13 @@ public class OrderServiceImpl implements OrderService {
     @Transactional
     public OrderResponse createOrder(
             OrderCreateRequest request,
-            UUID userId,
-            String token
+            UUID userId
     ) {
 
         TicketCategoryResponse category =
                 eventsClient.getTicketCategory(
                         request.eventId(),
-                        request.ticketCategoryId(),
-                        token
+                        request.ticketCategoryId()
                 );
 
         orderItemRepository.acquirePurchaseLock(
@@ -96,8 +94,7 @@ public class OrderServiceImpl implements OrderService {
 
             eventsClient.reserveCapacity(
                     request.eventId(),
-                    reservationRequest,
-                    token
+                    reservationRequest
             );
 
             capacityReserved = true;
@@ -172,8 +169,7 @@ public class OrderServiceImpl implements OrderService {
 
                     eventsClient.releaseCapacity(
                             request.eventId(),
-                            releaseRequest,
-                            token
+                            releaseRequest
                     );
 
                 } catch (RuntimeException releaseException) {

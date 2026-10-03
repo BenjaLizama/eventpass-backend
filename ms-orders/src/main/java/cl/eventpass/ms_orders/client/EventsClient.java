@@ -6,6 +6,7 @@ import cl.eventpass.ms_orders.dto.response.CapacityReleaseResponse;
 import cl.eventpass.ms_orders.dto.response.CapacityReservationResponse;
 import cl.eventpass.ms_orders.dto.response.StandardResponse;
 import cl.eventpass.ms_orders.dto.response.TicketCategoryResponse;
+import cl.eventpass.ms_orders.security.ServiceTokenProvider;
 import lombok.RequiredArgsConstructor;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.MediaType;
@@ -19,24 +20,32 @@ import java.util.UUID;
 public class EventsClient {
 
     private final RestClient eventsRestClient;
+    private final ServiceTokenProvider serviceTokenProvider;
 
     public CapacityReservationResponse reserveCapacity(
             UUID eventId,
-            CapacityReservationRequest request,
-            String token
+            CapacityReservationRequest request
     ) {
+
         StandardResponse<CapacityReservationResponse> response =
                 eventsRestClient
                         .patch()
-                        .uri("/api/v1/events/{eventId}/reserve", eventId)
-                        .header("Authorization", "Bearer " + token)
+                        .uri(
+                                "/api/v1/events/{eventId}/reserve",
+                                eventId
+                        )
+                        .header(
+                                "Authorization",
+                                "Bearer " + serviceTokenProvider.getToken()
+                        )
                         .contentType(MediaType.APPLICATION_JSON)
                         .body(request)
                         .retrieve()
                         .body(
                                 new ParameterizedTypeReference<
                                         StandardResponse<CapacityReservationResponse>
-                                        >() {}
+                                        >() {
+                                }
                         );
 
         if (response == null || response.data() == null) {
@@ -50,21 +59,28 @@ public class EventsClient {
 
     public CapacityReleaseResponse releaseCapacity(
             UUID eventId,
-            CapacityReleaseRequest request,
-            String token
+            CapacityReleaseRequest request
     ) {
+
         StandardResponse<CapacityReleaseResponse> response =
                 eventsRestClient
                         .patch()
-                        .uri("/api/v1/events/{eventId}/release", eventId)
-                        .header("Authorization", "Bearer " + token)
+                        .uri(
+                                "/api/v1/events/{eventId}/release",
+                                eventId
+                        )
+                        .header(
+                                "Authorization",
+                                "Bearer " + serviceTokenProvider.getToken()
+                        )
                         .contentType(MediaType.APPLICATION_JSON)
                         .body(request)
                         .retrieve()
                         .body(
                                 new ParameterizedTypeReference<
                                         StandardResponse<CapacityReleaseResponse>
-                                        >() {}
+                                        >() {
+                                }
                         );
 
         if (response == null || response.data() == null) {
@@ -78,9 +94,9 @@ public class EventsClient {
 
     public TicketCategoryResponse getTicketCategory(
             UUID eventId,
-            UUID ticketCategoryId,
-            String token
+            UUID ticketCategoryId
     ) {
+
         StandardResponse<TicketCategoryResponse> response =
                 eventsRestClient
                         .get()
@@ -89,12 +105,16 @@ public class EventsClient {
                                 eventId,
                                 ticketCategoryId
                         )
-                        .header("Authorization", "Bearer " + token)
+                        .header(
+                                "Authorization",
+                                "Bearer " + serviceTokenProvider.getToken()
+                        )
                         .retrieve()
                         .body(
                                 new ParameterizedTypeReference<
                                         StandardResponse<TicketCategoryResponse>
-                                        >() {}
+                                        >() {
+                                }
                         );
 
         if (response == null || response.data() == null) {

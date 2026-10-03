@@ -93,8 +93,6 @@ public interface OrderControllerDocs {
             @Valid
             @RequestBody OrderCreateRequest request,
 
-            UUID userId,
-
-            HttpServletRequest httpRequest
+            UUID userId
     );
 }

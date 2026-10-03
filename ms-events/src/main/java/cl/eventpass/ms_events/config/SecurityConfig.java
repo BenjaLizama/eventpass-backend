@@ -35,24 +35,53 @@ public class SecurityConfig {
     };
 
     @Bean
-    public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+    public SecurityFilterChain securityFilterChain(
+            HttpSecurity http
+    ) throws Exception {
+
         http
                 .csrf(AbstractHttpConfigurer::disable)
 
                 .sessionManagement(session -> session
-                        .sessionCreationPolicy(SessionCreationPolicy.STATELESS)
+                        .sessionCreationPolicy(
+                                SessionCreationPolicy.STATELESS
+                        )
                 )
 
                 .authorizeHttpRequests(req -> req
-                        .requestMatchers(WHITE_LIST_URL).permitAll()
-                        .requestMatchers(HttpMethod.GET, "/api/v1/events/**").permitAll()
-                        .requestMatchers(HttpMethod.GET, "/api/v1/venues/**").permitAll()
-                        .anyRequest().authenticated()
+                        .requestMatchers(WHITE_LIST_URL)
+                        .permitAll()
+
+                        .requestMatchers(
+                                HttpMethod.GET,
+                                "/api/v1/events/**"
+                        )
+                        .permitAll()
+
+                        .requestMatchers(
+                                HttpMethod.GET,
+                                "/api/v1/venues/**"
+                        )
+                        .permitAll()
+
+                        .requestMatchers(
+                                HttpMethod.PATCH,
+                                "/api/v1/events/*/reserve",
+                                "/api/v1/events/*/release"
+                        )
+                        .hasRole("INTERNAL_SERVICE")
+
+                        .anyRequest()
+                        .authenticated()
                 )
 
                 .exceptionHandling(exception -> exception
-                        .authenticationEntryPoint(authenticationEntryPoint())
-                        .accessDeniedHandler(accessDeniedHandler())
+                        .authenticationEntryPoint(
+                                authenticationEntryPoint()
+                        )
+                        .accessDeniedHandler(
+                                accessDeniedHandler()
+                        )
                 )
 
                 .addFilterBefore(
@@ -66,42 +95,78 @@ public class SecurityConfig {
     @Bean
     public AuthenticationEntryPoint authenticationEntryPoint() {
         return (request, response, authException) -> {
-            StandardErrorResponse error = StandardErrorResponse.builder()
-                    .status(HttpStatus.UNAUTHORIZED.value())
-                    .code("UNAUTHORIZED")
-                    .error(HttpStatus.UNAUTHORIZED.getReasonPhrase())
-                    .message("Se requiere autenticación para acceder a este recurso.")
-                    .developerMessage(authException.getMessage())
-                    .path(request.getRequestURI())
-                    .timestamp(System.currentTimeMillis())
-                    .build();
 
-            response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+            StandardErrorResponse error =
+                    StandardErrorResponse.builder()
+                            .status(
+                                    HttpStatus.UNAUTHORIZED.value()
+                            )
+                            .code("UNAUTHORIZED")
+                            .error(
+                                    HttpStatus.UNAUTHORIZED
+                                            .getReasonPhrase()
+                            )
+                            .message(
+                                    "Se requiere autenticación para acceder a este recurso."
+                            )
+                            .developerMessage(
+                                    authException.getMessage()
+                            )
+                            .path(request.getRequestURI())
+                            .timestamp(
+                                    System.currentTimeMillis()
+                            )
+                            .build();
+
+            response.setStatus(
+                    HttpServletResponse.SC_UNAUTHORIZED
+            );
             response.setContentType("application/json");
             response.setCharacterEncoding("UTF-8");
 
-            objectMapper.writeValue(response.getOutputStream(), error);
+            objectMapper.writeValue(
+                    response.getOutputStream(),
+                    error
+            );
         };
     }
 
     @Bean
     public AccessDeniedHandler accessDeniedHandler() {
         return (request, response, accessDeniedException) -> {
-            StandardErrorResponse error = StandardErrorResponse.builder()
-                    .status(HttpStatus.FORBIDDEN.value())
-                    .code("ACCESS_DENIED")
-                    .error(HttpStatus.FORBIDDEN.getReasonPhrase())
-                    .message("No tienes permisos suficientes para realizar esta operación.")
-                    .developerMessage(accessDeniedException.getMessage())
-                    .path(request.getRequestURI())
-                    .timestamp(System.currentTimeMillis())
-                    .build();
 
-            response.setStatus(HttpServletResponse.SC_FORBIDDEN);
+            StandardErrorResponse error =
+                    StandardErrorResponse.builder()
+                            .status(
+                                    HttpStatus.FORBIDDEN.value()
+                            )
+                            .code("ACCESS_DENIED")
+                            .error(
+                                    HttpStatus.FORBIDDEN
+                                            .getReasonPhrase()
+                            )
+                            .message(
+                                    "No tienes permisos suficientes para realizar esta operación."
+                            )
+                            .developerMessage(
+                                    accessDeniedException.getMessage()
+                            )
+                            .path(request.getRequestURI())
+                            .timestamp(
+                                    System.currentTimeMillis()
+                            )
+                            .build();
+
+            response.setStatus(
+                    HttpServletResponse.SC_FORBIDDEN
+            );
             response.setContentType("application/json");
             response.setCharacterEncoding("UTF-8");
 
-            objectMapper.writeValue(response.getOutputStream(), error);
+            objectMapper.writeValue(
+                    response.getOutputStream(),
+                    error
+            );
         };
     }
 }

@@ -26,16 +26,14 @@ public class OrderController implements OrderControllerDocs {
     @PostMapping
     public ResponseEntity<StandardResponse<OrderResponse>> createOrder(
             @Valid @RequestBody OrderCreateRequest request,
-            @CurrentUserId UUID userId,
-            HttpServletRequest httpRequest
+            @CurrentUserId UUID userId
     ) {
-        String token = extractBearerToken(httpRequest);
 
-        OrderResponse response = orderService.createOrder(
-                request,
-                userId,
-                token
-        );
+        OrderResponse response =
+                orderService.createOrder(
+                        request,
+                        userId
+                );
 
         return ResponseEntity
                 .status(HttpStatus.CREATED)

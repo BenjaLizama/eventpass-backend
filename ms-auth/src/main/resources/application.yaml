@@ -29,6 +29,13 @@ application:
       expiration: ${JWT_EXPIRATION:86400000} # 24 horas.
       refresh-token:
         expiration: ${JWT_REFRESH_EXPIRATION:604800000} # 7 días.
+      service-token:
+        expiration: ${JWT_SERVICE_EXPIRATION:900000}
+
+    services:
+      ms-orders:
+        client-id: ${MS_ORDERS_CLIENT_ID:eventpass-ms-orders}
+        client-secret: ${MS_ORDERS_CLIENT_SECRET:cambiame-ms-orders-secret}
 
 springdoc:
   api-docs:

@@ -10,6 +10,7 @@ import cl.eventpass.ms_auth.exception.EmailAlreadyExistsException;
 import cl.eventpass.ms_auth.dto.request.LoginRequest;
 import cl.eventpass.ms_auth.exception.ResourceNotFoundException;
 import cl.eventpass.ms_auth.exception.InvalidTokenException;
+import cl.eventpass.ms_auth.dto.request.RefreshTokenRequest;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -400,5 +401,254 @@ class AuthServiceTest {
 
         verifyNoInteractions(sessionService, tokenBlacklistService);
     }
+    @Test
+    void refreshToken_WhenTokenIsValid_ReturnsNewAccessToken() {
+        // Arrange
+        String refreshToken = "refresh-token-valido";
+        String email = "usuario@test.com";
+        String sessionId = "session-test-123";
+        UUID userId = UUID.randomUUID();
 
+        RefreshTokenRequest request = mock(RefreshTokenRequest.class);
+        CredentialEntity credential = mock(CredentialEntity.class);
+
+        when(request.refreshToken())
+                .thenReturn(refreshToken);
+
+        when(jwtService.extractUsername(refreshToken))
+                .thenReturn(email);
+
+        when(credentialRepository.findByEmailAndDeletedAtIsNull(email))
+                .thenReturn(Optional.of(credential));
+
+        when(jwtService.extractSessionId(refreshToken))
+                .thenReturn(sessionId);
+
+        when(sessionService.isSessionActive(sessionId))
+                .thenReturn(true);
+
+        when(jwtService.isTokenValid(refreshToken, credential))
+                .thenReturn(true);
+
+        when(credential.getId())
+                .thenReturn(userId);
+
+        when(jwtService.generateToken(credential, userId, sessionId))
+                .thenReturn("nuevo-access-token");
+
+        // Act
+        AuthResponse response = authService.refreshToken(request);
+
+        // Assert
+        assertNotNull(response);
+        assertEquals("nuevo-access-token", response.accessToken());
+        assertEquals(refreshToken, response.refreshToken());
+        assertEquals("Bearer", response.tokenType());
+        assertEquals(86_400, response.expiresIn());
+
+        verify(credentialRepository)
+                .findByEmailAndDeletedAtIsNull(email);
+
+        verify(sessionService)
+                .isSessionActive(sessionId);
+
+        verify(jwtService)
+                .isTokenValid(refreshToken, credential);
+
+        verify(jwtService)
+                .generateToken(credential, userId, sessionId);
+
+        verify(jwtService, never())
+                .generateRefreshToken(any(), any(UUID.class), anyString());
+
+        verify(sessionService, never())
+                .createSession(anyString(), anyString());
+
+        verify(sessionService, never())
+                .revokeSession(anyString());
+    }
+    @Test
+    void refreshToken_WhenSessionIsInactive_ThrowsInvalidTokenException() {
+        // Arrange
+        String refreshToken = "refresh-token";
+        String email = "usuario@test.com";
+        String sessionId = "session-inactiva-123";
+
+        RefreshTokenRequest request = mock(RefreshTokenRequest.class);
+        CredentialEntity credential = mock(CredentialEntity.class);
+
+        when(request.refreshToken())
+                .thenReturn(refreshToken);
+
+        when(jwtService.extractUsername(refreshToken))
+                .thenReturn(email);
+
+        when(credentialRepository.findByEmailAndDeletedAtIsNull(email))
+                .thenReturn(Optional.of(credential));
+
+        when(jwtService.extractSessionId(refreshToken))
+                .thenReturn(sessionId);
+
+        when(sessionService.isSessionActive(sessionId))
+                .thenReturn(false);
+
+        // Act and Assert
+        InvalidTokenException exception = assertThrows(
+                InvalidTokenException.class,
+                () -> authService.refreshToken(request)
+        );
+
+        assertEquals(
+                "La sesión se encuentra cerrada o revocada.",
+                exception.getMessage()
+        );
+
+        verify(sessionService)
+                .isSessionActive(sessionId);
+
+        verify(jwtService, never())
+                .isTokenValid(anyString(), any());
+
+        verify(jwtService, never())
+                .generateToken(any(), any(UUID.class), anyString());
+
+        verify(jwtService, never())
+                .generateRefreshToken(any(), any(UUID.class), anyString());
+
+        verify(sessionService, never())
+                .createSession(anyString(), anyString());
+    }
+    @Test
+    void refreshToken_WhenTokenCannotBeParsed_ThrowsInvalidTokenException() {
+        // Arrange
+        String refreshToken = "refresh-token-malformado";
+
+        RefreshTokenRequest request = mock(RefreshTokenRequest.class);
+
+        when(request.refreshToken())
+                .thenReturn(refreshToken);
+
+        when(jwtService.extractUsername(refreshToken))
+                .thenThrow(new IllegalArgumentException("JWT malformado"));
+
+        // Act and Assert
+        InvalidTokenException exception = assertThrows(
+                InvalidTokenException.class,
+                () -> authService.refreshToken(request)
+        );
+
+        assertEquals(
+                "Refresh token inválido.",
+                exception.getMessage()
+        );
+
+        verify(jwtService)
+                .extractUsername(refreshToken);
+
+        verifyNoMoreInteractions(jwtService);
+
+        verifyNoInteractions(
+                credentialRepository,
+                sessionService,
+                tokenBlacklistService
+        );
+    }
+    @Test
+    void refreshToken_WhenUserDoesNotExist_ThrowsInvalidTokenException() {
+        // Arrange
+        String refreshToken = "refresh-token";
+        String email = "inexistente@test.com";
+
+        RefreshTokenRequest request = mock(RefreshTokenRequest.class);
+
+        when(request.refreshToken())
+                .thenReturn(refreshToken);
+
+        when(jwtService.extractUsername(refreshToken))
+                .thenReturn(email);
+
+        when(credentialRepository.findByEmailAndDeletedAtIsNull(email))
+                .thenReturn(Optional.empty());
+
+        // Act and Assert
+        InvalidTokenException exception = assertThrows(
+                InvalidTokenException.class,
+                () -> authService.refreshToken(request)
+        );
+
+        assertEquals(
+                "El usuario asociado al refresh token no existe.",
+                exception.getMessage()
+        );
+
+        verify(credentialRepository)
+                .findByEmailAndDeletedAtIsNull(email);
+
+        verify(jwtService)
+                .extractUsername(refreshToken);
+
+        verifyNoMoreInteractions(jwtService);
+
+        verifyNoInteractions(
+                sessionService,
+                tokenBlacklistService
+        );
+    }
+    @Test
+    void refreshToken_WhenTokenValidationFails_ThrowsInvalidTokenException() {
+        // Arrange
+        String refreshToken = "refresh-token-rechazado";
+        String email = "usuario@test.com";
+        String sessionId = "session-test-123";
+
+        RefreshTokenRequest request = mock(RefreshTokenRequest.class);
+        CredentialEntity credential = mock(CredentialEntity.class);
+
+        when(request.refreshToken())
+                .thenReturn(refreshToken);
+
+        when(jwtService.extractUsername(refreshToken))
+                .thenReturn(email);
+
+        when(credentialRepository.findByEmailAndDeletedAtIsNull(email))
+                .thenReturn(Optional.of(credential));
+
+        when(jwtService.extractSessionId(refreshToken))
+                .thenReturn(sessionId);
+
+        when(sessionService.isSessionActive(sessionId))
+                .thenReturn(true);
+
+        when(jwtService.isTokenValid(refreshToken, credential))
+                .thenReturn(false);
+
+        // Act and Assert
+        InvalidTokenException exception = assertThrows(
+                InvalidTokenException.class,
+                () -> authService.refreshToken(request)
+        );
+
+        assertEquals(
+                "Refresh token inválido, expirado o revocado.",
+                exception.getMessage()
+        );
+
+        verify(sessionService)
+                .isSessionActive(sessionId);
+
+        verify(jwtService)
+                .isTokenValid(refreshToken, credential);
+
+        verify(jwtService, never())
+                .generateToken(any(), any(UUID.class), anyString());
+
+        verify(jwtService, never())
+                .generateRefreshToken(any(), any(UUID.class), anyString());
+
+        verify(sessionService, never())
+                .createSession(anyString(), anyString());
+
+        verify(sessionService, never())
+                .revokeSession(anyString());
+    }
 }

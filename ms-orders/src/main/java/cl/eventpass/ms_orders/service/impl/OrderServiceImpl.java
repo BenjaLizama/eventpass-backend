@@ -12,6 +12,7 @@ import cl.eventpass.ms_orders.entity.OrderItemEntity;
 import cl.eventpass.ms_orders.enums.OrderStatus;
 import cl.eventpass.ms_orders.enums.PaymentStatus;
 import cl.eventpass.ms_orders.exception.InvalidRequestException;
+import cl.eventpass.ms_orders.exception.ResourceNotFoundException;
 import cl.eventpass.ms_orders.repository.OrderItemRepository;
 import cl.eventpass.ms_orders.repository.OrderRepository;
 import cl.eventpass.ms_orders.service.OrderService;
@@ -182,5 +183,56 @@ public class OrderServiceImpl implements OrderService {
 
             throw exception;
         }
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public OrderResponse getOrderById(
+            UUID orderId,
+            UUID userId
+    ) {
+
+        OrderEntity order =
+                orderRepository.findByIdAndUserId(
+                                orderId,
+                                userId
+                        )
+                        .orElseThrow(() ->
+                                new ResourceNotFoundException(
+                                        "No se encontró la orden solicitada."
+                                )
+                        );
+
+        List<OrderItemEntity> orderItems =
+                orderItemRepository.findAllByOrderId(order.getId());
+
+        List<OrderItemResponse> itemResponses =
+                orderItems.stream()
+                        .map(item ->
+                                new OrderItemResponse(
+                                        item.getId(),
+                                        item.getEventId(),
+                                        item.getTicketCategoryId(),
+                                        item.getQuantity(),
+                                        item.getUnitPrice(),
+                                        item.getUnitPrice()
+                                                .multiply(
+                                                        BigDecimal.valueOf(
+                                                                item.getQuantity()
+                                                        )
+                                                )
+                                )
+                        )
+                        .toList();
+
+        return new OrderResponse(
+                order.getId(),
+                order.getUserId(),
+                order.getTotalAmount(),
+                order.getStatus(),
+                order.getPaymentStatus(),
+                order.getExpiresAt(),
+                itemResponses
+        );
     }
 }

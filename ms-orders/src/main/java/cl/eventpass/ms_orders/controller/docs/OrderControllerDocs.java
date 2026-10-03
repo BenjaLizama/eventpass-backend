@@ -108,4 +108,55 @@ public interface OrderControllerDocs {
             )
             UUID userId
     );
+
+    @Operation(
+            summary = "Obtener orden por ID",
+            description = """
+                Obtiene una orden de compra mediante su identificador único.
+
+                La orden solo puede ser consultada por el usuario autenticado
+                al que pertenece. La identidad del usuario se obtiene mediante
+                @CurrentUserId a partir del JWT.
+
+                Si la orden no existe o no pertenece al usuario autenticado,
+                se retorna un error 404.
+                """
+    )
+    @ApiResponses({
+            @ApiResponse(
+                    responseCode = "200",
+                    description = "Orden obtenida exitosamente."
+            ),
+            @ApiResponse(
+                    responseCode = "401",
+                    description = "El usuario no está autenticado o el token JWT no es válido.",
+                    content = @Content(
+                            schema = @Schema(
+                                    implementation = StandardErrorResponse.class
+                            )
+                    )
+            ),
+            @ApiResponse(
+                    responseCode = "404",
+                    description = "No se encontró la orden solicitada.",
+                    content = @Content(
+                            schema = @Schema(
+                                    implementation = StandardErrorResponse.class
+                            )
+                    )
+            )
+    })
+    ResponseEntity<StandardResponse<OrderResponse>> getOrderById(
+            @Parameter(
+                    description = "Identificador único de la orden.",
+                    required = true
+            )
+            UUID id,
+
+            @Parameter(
+                    description = "UUID del usuario autenticado obtenido desde el JWT.",
+                    hidden = true
+            )
+            UUID userId
+    );
 }

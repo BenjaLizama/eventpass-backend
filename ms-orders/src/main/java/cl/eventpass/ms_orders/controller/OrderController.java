@@ -45,6 +45,23 @@ public class OrderController implements OrderControllerDocs {
                 );
     }
 
+    @Override
+    @GetMapping("/{id}")
+    public ResponseEntity<StandardResponse<OrderResponse>> getOrderById(
+            @PathVariable UUID id,
+            @CurrentUserId UUID userId
+    ) {
+        OrderResponse response = orderService.getOrderById(id, userId);
+
+        return ResponseEntity.ok(
+                StandardResponse.ok(
+                        "Orden obtenida con éxito.",
+                        response
+                )
+        );
+    }
+
+
     private String extractBearerToken(HttpServletRequest request) {
         String authorizationHeader =
                 request.getHeader("Authorization");

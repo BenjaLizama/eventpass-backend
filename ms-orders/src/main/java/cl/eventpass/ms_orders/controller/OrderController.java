@@ -9,6 +9,8 @@ import cl.eventpass.ms_orders.service.OrderService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -59,6 +61,20 @@ public class OrderController implements OrderControllerDocs {
                         response
                 )
         );
+    }
+
+    @Override
+    @GetMapping("/my-orders")
+    public ResponseEntity<StandardResponse<Page<OrderResponse>>> getMyOrders(
+            Pageable pageable,
+            @CurrentUserId UUID userId
+    ) {
+        Page<OrderResponse> response = orderService.getMyOrders(userId, pageable);
+
+        return ResponseEntity.ok(StandardResponse.ok(
+                "Órdenes obtenidas con éxito.",
+                response
+        ));
     }
 
 

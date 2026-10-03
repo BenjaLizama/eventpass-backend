@@ -13,6 +13,9 @@ import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import org.springdoc.core.annotations.ParameterObject;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.RequestBody;
 
@@ -104,7 +107,7 @@ public interface OrderControllerDocs {
 
             @Parameter(
                     description = "UUID del usuario autenticado obtenido desde el JWT.",
-                    required = true
+                    hidden = true
             )
             UUID userId
     );
@@ -112,15 +115,15 @@ public interface OrderControllerDocs {
     @Operation(
             summary = "Obtener orden por ID",
             description = """
-                Obtiene una orden de compra mediante su identificador único.
+                    Obtiene una orden de compra mediante su identificador único.
 
-                La orden solo puede ser consultada por el usuario autenticado
-                al que pertenece. La identidad del usuario se obtiene mediante
-                @CurrentUserId a partir del JWT.
+                    La orden solo puede ser consultada por el usuario autenticado
+                    al que pertenece. La identidad del usuario se obtiene mediante
+                    @CurrentUserId a partir del JWT.
 
-                Si la orden no existe o no pertenece al usuario autenticado,
-                se retorna un error 404.
-                """
+                    Si la orden no existe o no pertenece al usuario autenticado,
+                    se retorna un error 404.
+                    """
     )
     @ApiResponses({
             @ApiResponse(
@@ -152,6 +155,54 @@ public interface OrderControllerDocs {
                     required = true
             )
             UUID id,
+
+            @Parameter(
+                    description = "UUID del usuario autenticado obtenido desde el JWT.",
+                    hidden = true
+            )
+            UUID userId
+    );
+
+    @Operation(
+            summary = "Obtener mis órdenes",
+            description = """
+                    Obtiene las órdenes de compra pertenecientes al usuario
+                    autenticado.
+
+                    La identidad del usuario se obtiene directamente desde el JWT
+                    mediante @CurrentUserId. El cliente no puede especificar
+                    manualmente el usuario cuyas órdenes desea consultar.
+
+                    Los resultados se entregan de forma paginada.
+                    """
+    )
+    @ApiResponses({
+            @ApiResponse(
+                    responseCode = "200",
+                    description = "Órdenes obtenidas exitosamente."
+            ),
+            @ApiResponse(
+                    responseCode = "401",
+                    description = "El usuario no está autenticado o el token JWT no es válido.",
+                    content = @Content(
+                            schema = @Schema(
+                                    implementation = StandardErrorResponse.class
+                            )
+                    )
+            ),
+            @ApiResponse(
+                    responseCode = "500",
+                    description = "Ocurrió un error interno al consultar las órdenes.",
+                    content = @Content(
+                            schema = @Schema(
+                                    implementation = StandardErrorResponse.class
+                            )
+                    )
+            )
+    })
+    ResponseEntity<StandardResponse<Page<OrderResponse>>> getMyOrders(
+            @ParameterObject
+            Pageable pageable,
 
             @Parameter(
                     description = "UUID del usuario autenticado obtenido desde el JWT.",

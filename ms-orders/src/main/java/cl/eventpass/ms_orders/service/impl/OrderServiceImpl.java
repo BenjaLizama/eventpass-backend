@@ -17,6 +17,8 @@ import cl.eventpass.ms_orders.repository.OrderItemRepository;
 import cl.eventpass.ms_orders.repository.OrderRepository;
 import cl.eventpass.ms_orders.service.OrderService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -194,45 +196,66 @@ public class OrderServiceImpl implements OrderService {
 
         OrderEntity order =
                 orderRepository.findByIdAndUserId(
-                                orderId,
-                                userId
-                        )
-                        .orElseThrow(() ->
-                                new ResourceNotFoundException(
-                                        "No se encontró la orden solicitada."
-                                )
-                        );
+                    orderId,
+                    userId
+                )
+                .orElseThrow(() ->
+                    new ResourceNotFoundException(
+                        "No se encontró la orden solicitada."
+                    )
+                );
+
+        return toOrderResponse(order);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Page<OrderResponse> getMyOrders(
+            UUID userId,
+            Pageable pageable
+    ) {
+
+        return orderRepository
+                .findAllByUserId(userId, pageable)
+                .map(this::toOrderResponse);
+    }
+
+    private OrderResponse toOrderResponse(
+            OrderEntity order
+    ) {
 
         List<OrderItemEntity> orderItems =
-                orderItemRepository.findAllByOrderId(order.getId());
+                orderItemRepository.findAllByOrderId(
+                        order.getId()
+                );
 
         List<OrderItemResponse> itemResponses =
-                orderItems.stream()
-                        .map(item ->
-                                new OrderItemResponse(
-                                        item.getId(),
-                                        item.getEventId(),
-                                        item.getTicketCategoryId(),
-                                        item.getQuantity(),
-                                        item.getUnitPrice(),
-                                        item.getUnitPrice()
-                                                .multiply(
-                                                        BigDecimal.valueOf(
-                                                                item.getQuantity()
-                                                        )
-                                                )
+            orderItems.stream()
+                .map(item ->
+                    new OrderItemResponse(
+                        item.getId(),
+                        item.getEventId(),
+                        item.getTicketCategoryId(),
+                        item.getQuantity(),
+                        item.getUnitPrice(),
+                        item.getUnitPrice()
+                            .multiply(
+                                BigDecimal.valueOf(
+                                    item.getQuantity()
                                 )
-                        )
-                        .toList();
+                            )
+                    )
+                )
+                .toList();
 
         return new OrderResponse(
-                order.getId(),
-                order.getUserId(),
-                order.getTotalAmount(),
-                order.getStatus(),
-                order.getPaymentStatus(),
-                order.getExpiresAt(),
-                itemResponses
+            order.getId(),
+            order.getUserId(),
+            order.getTotalAmount(),
+            order.getStatus(),
+            order.getPaymentStatus(),
+            order.getExpiresAt(),
+            itemResponses
         );
     }
 }

@@ -7,6 +7,9 @@ import cl.eventpass.ms_auth.repository.CredentialRepository;
 import cl.eventpass.ms_auth.dto.request.RegisterRequest;
 import cl.eventpass.ms_auth.dto.response.AuthResponse;
 import cl.eventpass.ms_auth.exception.EmailAlreadyExistsException;
+import cl.eventpass.ms_auth.dto.request.LoginRequest;
+import cl.eventpass.ms_auth.exception.ResourceNotFoundException;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -177,4 +180,91 @@ class AuthServiceTest {
 
         verifyNoInteractions(passwordEncoder, authMapper);
     }
+    @Test
+    void login_WhenCredentialsAreValid_ReturnsAuthResponse() {
+        // Arrange
+        LoginRequest request = new LoginRequest(
+                "usuario@test.com",
+                "Password123!"
+        );
+
+        CredentialEntity credential = mock(CredentialEntity.class);
+        UUID userId = UUID.randomUUID();
+
+        when(credential.getId())
+                .thenReturn(userId);
+
+        when(credential.getUsername())
+                .thenReturn("usuario@test.com");
+
+        when(credentialRepository.findByEmailAndDeletedAtIsNull(
+                "usuario@test.com"
+        )).thenReturn(Optional.of(credential));
+
+        when(jwtService.generateToken(
+                any(),
+                any(UUID.class),
+                anyString()
+        )).thenReturn("access-token");
+
+        when(jwtService.generateRefreshToken(
+                any(),
+                any(UUID.class),
+                anyString()
+        )).thenReturn("refresh-token");
+
+        // Act
+        AuthResponse response = authService.login(request);
+
+        // Assert
+        assertNotNull(response);
+        assertEquals("access-token", response.accessToken());
+        assertEquals("refresh-token", response.refreshToken());
+        assertEquals("Bearer", response.tokenType());
+        assertEquals(86400, response.expiresIn());
+
+        verify(authenticationManager).authenticate(
+                argThat(authentication ->
+                        authentication instanceof UsernamePasswordAuthenticationToken
+                                && authentication.getPrincipal()
+                                .equals("usuario@test.com")
+                                && authentication.getCredentials()
+                                .equals("Password123!")
+                )
+        );
+
+        verify(credentialRepository)
+                .findByEmailAndDeletedAtIsNull("usuario@test.com");
+
+        verify(sessionService)
+                .createSession(any(), eq("usuario@test.com"));
+    }
+    @Test
+    void login_WhenUserDoesNotExist_ThrowsResourceNotFoundException() {
+        // Arrange
+        LoginRequest request = new LoginRequest(
+                "inexistente@test.com",
+                "Password123!"
+        );
+
+        when(credentialRepository.findByEmailAndDeletedAtIsNull(
+                "inexistente@test.com"
+        )).thenReturn(Optional.empty());
+
+        // Act and Assert
+        assertThrows(
+                ResourceNotFoundException.class,
+                () -> authService.login(request)
+        );
+
+        verify(authenticationManager).authenticate(
+                any(UsernamePasswordAuthenticationToken.class)
+        );
+
+        verify(credentialRepository)
+                .findByEmailAndDeletedAtIsNull("inexistente@test.com");
+
+        verifyNoInteractions(jwtService, sessionService);
+    }
+
 }

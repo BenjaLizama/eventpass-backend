@@ -38,3 +38,7 @@ app:
     queues:
       order-created: "eventpass-orders-created-queue"
       order-completed: "eventpass-orders-completed-queue"
+
+  payment:
+    mock:
+      result: APPROVED # Solo para pruebas.

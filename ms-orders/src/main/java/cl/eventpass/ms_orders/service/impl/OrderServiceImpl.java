@@ -16,6 +16,7 @@ import cl.eventpass.ms_orders.exception.InvalidRequestException;
 import cl.eventpass.ms_orders.exception.ResourceNotFoundException;
 import cl.eventpass.ms_orders.repository.OrderItemRepository;
 import cl.eventpass.ms_orders.repository.OrderRepository;
+import cl.eventpass.ms_orders.service.OrderCapacityService;
 import cl.eventpass.ms_orders.service.OrderService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -38,6 +39,7 @@ public class OrderServiceImpl implements OrderService {
     private final OrderRepository orderRepository;
     private final OrderItemRepository orderItemRepository;
     private final EventsClient eventsClient;
+    private final OrderCapacityService orderCapacityService;
 
     @Override
     @Transactional
@@ -237,22 +239,7 @@ public class OrderServiceImpl implements OrderService {
             );
         }
 
-        List<OrderItemEntity> orderItems =
-                orderItemRepository.findAllByOrderId(order.getId());
-
-        for (OrderItemEntity item : orderItems) {
-
-            CapacityReleaseRequest request =
-                    new CapacityReleaseRequest(
-                            item.getTicketCategoryId(),
-                            item.getQuantity()
-                    );
-
-            eventsClient.releaseCapacity(
-                    item.getEventId(),
-                    request
-            );
-        }
+        orderCapacityService.releaseCapacity(order);
 
         order.setStatus(OrderStatus.CANCELLED);
 

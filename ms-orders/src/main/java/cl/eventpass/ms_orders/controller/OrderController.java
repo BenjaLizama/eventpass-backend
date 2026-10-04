@@ -6,7 +6,6 @@ import cl.eventpass.ms_orders.dto.request.OrderCreateRequest;
 import cl.eventpass.ms_orders.dto.response.OrderResponse;
 import cl.eventpass.ms_orders.dto.response.StandardResponse;
 import cl.eventpass.ms_orders.service.OrderService;
-import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -53,13 +52,18 @@ public class OrderController implements OrderControllerDocs {
             @PathVariable UUID id,
             @CurrentUserId UUID userId
     ) {
-        OrderResponse response = orderService.getOrderById(id, userId);
+
+        OrderResponse response =
+            orderService.getOrderById(
+                id,
+                userId
+            );
 
         return ResponseEntity.ok(
-                StandardResponse.ok(
-                        "Orden obtenida con éxito.",
-                        response
-                )
+            StandardResponse.ok(
+                "Orden obtenida con éxito.",
+                response
+            )
         );
     }
 
@@ -69,12 +73,19 @@ public class OrderController implements OrderControllerDocs {
             Pageable pageable,
             @CurrentUserId UUID userId
     ) {
-        Page<OrderResponse> response = orderService.getMyOrders(userId, pageable);
 
-        return ResponseEntity.ok(StandardResponse.ok(
+        Page<OrderResponse> response =
+            orderService.getMyOrders(
+                userId,
+                pageable
+            );
+
+        return ResponseEntity.ok(
+            StandardResponse.ok(
                 "Órdenes obtenidas con éxito.",
                 response
-        ));
+            )
+        );
     }
 
     @Override
@@ -83,26 +94,18 @@ public class OrderController implements OrderControllerDocs {
             @PathVariable UUID id,
             @CurrentUserId UUID userId
     ) {
-        OrderResponse response = orderService.cancelOrder(id, userId);
 
-        return ResponseEntity.ok(StandardResponse.ok(
+        OrderResponse response =
+            orderService.cancelOrder(
+                id,
+                userId
+            );
+
+        return ResponseEntity.ok(
+            StandardResponse.ok(
                 "Orden cancelada con éxito.",
                 response
-        ));
-    }
-
-
-    private String extractBearerToken(HttpServletRequest request) {
-        String authorizationHeader =
-                request.getHeader("Authorization");
-
-        if (authorizationHeader == null
-                || !authorizationHeader.startsWith("Bearer ")) {
-            throw new IllegalStateException(
-                    "No se encontró un token Bearer válido."
-            );
-        }
-
-        return authorizationHeader.substring(7);
+            )
+        );
     }
 }

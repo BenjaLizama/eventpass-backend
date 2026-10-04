@@ -4,7 +4,6 @@ import cl.eventpass.ms_orders.client.EventsClient;
 import cl.eventpass.ms_orders.dto.request.CapacityReleaseRequest;
 import cl.eventpass.ms_orders.dto.request.CapacityReservationRequest;
 import cl.eventpass.ms_orders.dto.request.OrderCreateRequest;
-import cl.eventpass.ms_orders.dto.response.OrderItemResponse;
 import cl.eventpass.ms_orders.dto.response.OrderResponse;
 import cl.eventpass.ms_orders.dto.response.TicketCategoryResponse;
 import cl.eventpass.ms_orders.entity.OrderEntity;
@@ -14,6 +13,7 @@ import cl.eventpass.ms_orders.enums.PaymentStatus;
 import cl.eventpass.ms_orders.exception.BusinessRuleException;
 import cl.eventpass.ms_orders.exception.InvalidRequestException;
 import cl.eventpass.ms_orders.exception.ResourceNotFoundException;
+import cl.eventpass.ms_orders.mapper.OrderMapper;
 import cl.eventpass.ms_orders.repository.OrderItemRepository;
 import cl.eventpass.ms_orders.repository.OrderRepository;
 import cl.eventpass.ms_orders.service.OrderCapacityService;
@@ -40,6 +40,7 @@ public class OrderServiceImpl implements OrderService {
     private final OrderItemRepository orderItemRepository;
     private final EventsClient eventsClient;
     private final OrderCapacityService orderCapacityService;
+    private final OrderMapper orderMapper;
 
     @Override
     @Transactional
@@ -136,29 +137,9 @@ public class OrderServiceImpl implements OrderService {
             OrderItemEntity savedItem =
                     orderItemRepository.saveAndFlush(orderItem);
 
-            OrderItemResponse itemResponse =
-                    new OrderItemResponse(
-                            savedItem.getId(),
-                            savedItem.getEventId(),
-                            savedItem.getTicketCategoryId(),
-                            savedItem.getQuantity(),
-                            savedItem.getUnitPrice(),
-                            savedItem.getUnitPrice()
-                                    .multiply(
-                                            BigDecimal.valueOf(
-                                                    savedItem.getQuantity()
-                                            )
-                                    )
-                    );
-
-            return new OrderResponse(
-                    savedOrder.getId(),
-                    savedOrder.getUserId(),
-                    savedOrder.getTotalAmount(),
-                    savedOrder.getStatus(),
-                    savedOrder.getPaymentStatus(),
-                    savedOrder.getExpiresAt(),
-                    List.of(itemResponse)
+            return orderMapper.toResponse(
+                    savedOrder,
+                    List.of(savedItem)
             );
 
         } catch (RuntimeException exception) {
@@ -199,16 +180,19 @@ public class OrderServiceImpl implements OrderService {
 
         OrderEntity order =
                 orderRepository.findByIdAndUserId(
-                    orderId,
-                    userId
-                )
-                .orElseThrow(() ->
-                    new ResourceNotFoundException(
-                        "No se encontró la orden solicitada."
-                    )
-                );
+                                orderId,
+                                userId
+                        )
+                        .orElseThrow(() ->
+                                new ResourceNotFoundException(
+                                        "No se encontró la orden solicitada."
+                                )
+                        );
 
-        return toOrderResponse(order);
+        return orderMapper.toResponse(
+                order,
+                orderItemRepository.findAllByOrderId(order.getId())
+        );
     }
 
     @Override
@@ -220,18 +204,31 @@ public class OrderServiceImpl implements OrderService {
 
         return orderRepository
                 .findAllByUserId(userId, pageable)
-                .map(this::toOrderResponse);
+                .map(order ->
+                        orderMapper.toResponse(
+                                order,
+                                orderItemRepository.findAllByOrderId(order.getId())
+                        )
+                );
     }
 
     @Override
     @Transactional
-    public OrderResponse cancelOrder(UUID orderId, UUID userId) {
+    public OrderResponse cancelOrder(
+            UUID orderId,
+            UUID userId
+    ) {
 
         OrderEntity order =
-                orderRepository.findByIdAndUserId(orderId, userId)
-                        .orElseThrow(() -> new ResourceNotFoundException(
-                                "No se encontró la orden solicitada."
-                        ));
+                orderRepository.findByIdAndUserId(
+                                orderId,
+                                userId
+                        )
+                        .orElseThrow(() ->
+                                new ResourceNotFoundException(
+                                        "No se encontró la orden solicitada."
+                                )
+                        );
 
         if (order.getStatus() != OrderStatus.PENDING) {
             throw new BusinessRuleException(
@@ -246,45 +243,9 @@ public class OrderServiceImpl implements OrderService {
         OrderEntity savedOrder =
                 orderRepository.save(order);
 
-        return toOrderResponse(savedOrder);
-    }
-
-    private OrderResponse toOrderResponse(
-            OrderEntity order
-    ) {
-
-        List<OrderItemEntity> orderItems =
-                orderItemRepository.findAllByOrderId(
-                        order.getId()
-                );
-
-        List<OrderItemResponse> itemResponses =
-            orderItems.stream()
-                .map(item ->
-                    new OrderItemResponse(
-                        item.getId(),
-                        item.getEventId(),
-                        item.getTicketCategoryId(),
-                        item.getQuantity(),
-                        item.getUnitPrice(),
-                        item.getUnitPrice()
-                            .multiply(
-                                BigDecimal.valueOf(
-                                    item.getQuantity()
-                                )
-                            )
-                    )
-                )
-                .toList();
-
-        return new OrderResponse(
-            order.getId(),
-            order.getUserId(),
-            order.getTotalAmount(),
-            order.getStatus(),
-            order.getPaymentStatus(),
-            order.getExpiresAt(),
-            itemResponses
+        return orderMapper.toResponse(
+                savedOrder,
+                orderItemRepository.findAllByOrderId(savedOrder.getId())
         );
     }
 }

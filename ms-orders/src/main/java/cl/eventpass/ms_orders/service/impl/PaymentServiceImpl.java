@@ -1,14 +1,13 @@
 package cl.eventpass.ms_orders.service.impl;
 
 import cl.eventpass.ms_orders.dto.request.PaymentRequest;
-import cl.eventpass.ms_orders.dto.response.OrderItemResponse;
 import cl.eventpass.ms_orders.dto.response.OrderResponse;
 import cl.eventpass.ms_orders.entity.OrderEntity;
-import cl.eventpass.ms_orders.entity.OrderItemEntity;
 import cl.eventpass.ms_orders.enums.OrderStatus;
 import cl.eventpass.ms_orders.enums.PaymentStatus;
 import cl.eventpass.ms_orders.exception.BusinessRuleException;
 import cl.eventpass.ms_orders.exception.ResourceNotFoundException;
+import cl.eventpass.ms_orders.mapper.OrderMapper;
 import cl.eventpass.ms_orders.payment.PaymentProvider;
 import cl.eventpass.ms_orders.payment.PaymentResult;
 import cl.eventpass.ms_orders.repository.OrderItemRepository;
@@ -19,9 +18,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.math.BigDecimal;
 import java.time.Instant;
-import java.util.List;
 import java.util.UUID;
 
 @Service
@@ -32,6 +29,7 @@ public class PaymentServiceImpl implements PaymentService {
     private final OrderItemRepository orderItemRepository;
     private final OrderCapacityService orderCapacityService;
     private final PaymentProvider paymentProvider;
+    private final OrderMapper orderMapper;
 
     @Override
     @Transactional
@@ -42,7 +40,10 @@ public class PaymentServiceImpl implements PaymentService {
     ) {
 
         OrderEntity order =
-                orderRepository.findByIdAndUserId(orderId, userId)
+                orderRepository.findByIdAndUserId(
+                                orderId,
+                                userId
+                        )
                         .orElseThrow(() ->
                                 new ResourceNotFoundException(
                                         "No se encontró la orden solicitada."
@@ -73,7 +74,10 @@ public class PaymentServiceImpl implements PaymentService {
         OrderEntity savedOrder =
                 orderRepository.save(order);
 
-        return toOrderResponse(savedOrder);
+        return orderMapper.toResponse(
+                savedOrder,
+                orderItemRepository.findAllByOrderId(savedOrder.getId())
+        );
     }
 
     private void validateOrderForPayment(OrderEntity order) {
@@ -95,40 +99,5 @@ public class PaymentServiceImpl implements PaymentService {
                     "La orden ha expirado y no puede procesarse el pago."
             );
         }
-    }
-
-    private OrderResponse toOrderResponse(OrderEntity order) {
-
-        List<OrderItemEntity> orderItems =
-                orderItemRepository.findAllByOrderId(order.getId());
-
-        List<OrderItemResponse> itemResponses =
-                orderItems.stream()
-                        .map(item ->
-                                new OrderItemResponse(
-                                        item.getId(),
-                                        item.getEventId(),
-                                        item.getTicketCategoryId(),
-                                        item.getQuantity(),
-                                        item.getUnitPrice(),
-                                        item.getUnitPrice()
-                                                .multiply(
-                                                        BigDecimal.valueOf(
-                                                                item.getQuantity()
-                                                        )
-                                                )
-                                )
-                        )
-                        .toList();
-
-        return new OrderResponse(
-                order.getId(),
-                order.getUserId(),
-                order.getTotalAmount(),
-                order.getStatus(),
-                order.getPaymentStatus(),
-                order.getExpiresAt(),
-                itemResponses
-        );
     }
 }

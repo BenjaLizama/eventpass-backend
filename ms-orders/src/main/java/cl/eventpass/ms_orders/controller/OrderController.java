@@ -77,6 +77,20 @@ public class OrderController implements OrderControllerDocs {
         ));
     }
 
+    @Override
+    @PatchMapping("/{id}/cancel")
+    public ResponseEntity<StandardResponse<OrderResponse>> cancelOrder(
+            @PathVariable UUID id,
+            @CurrentUserId UUID userId
+    ) {
+        OrderResponse response = orderService.cancelOrder(id, userId);
+
+        return ResponseEntity.ok(StandardResponse.ok(
+                "Orden cancelada con éxito.",
+                response
+        ));
+    }
+
 
     private String extractBearerToken(HttpServletRequest request) {
         String authorizationHeader =

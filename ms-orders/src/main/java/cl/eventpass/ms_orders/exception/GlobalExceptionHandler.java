@@ -45,6 +45,21 @@ public class GlobalExceptionHandler {
         );
     }
 
+    @ExceptionHandler(BusinessRuleException.class)
+    public ResponseEntity<StandardErrorResponse> handleBusinessRule(
+            BusinessRuleException ex,
+            HttpServletRequest request
+    ) {
+        return build(
+                HttpStatus.CONFLICT,
+                "BUSINESS_RULE_VIOLATION",
+                ex.getMessage(),
+                ex,
+                request,
+                null
+        );
+    }
+
     @ExceptionHandler({
             InvalidDataAccessApiUsageException.class,
             PropertyReferenceException.class

@@ -210,4 +210,80 @@ public interface OrderControllerDocs {
             )
             UUID userId
     );
+
+    @Operation(
+            summary = "Cancelar orden",
+            description = """
+                    Cancela una orden de compra perteneciente al usuario
+                    autenticado.
+
+                    La identidad del usuario se obtiene mediante @CurrentUserId
+                    a partir del JWT. El cliente no puede especificar manualmente
+                    el usuario propietario de la orden.
+
+                    Solo las órdenes en estado PENDING pueden ser canceladas.
+
+                    Antes de cambiar el estado de la orden, ms-orders solicita
+                    a ms-events la liberación del aforo reservado para cada
+                    categoría de ticket asociada a la orden.
+
+                    Una vez liberado el aforo correctamente, la orden cambia
+                    a estado CANCELLED. El estado de pago permanece PENDING.
+                    """
+    )
+    @ApiResponses({
+            @ApiResponse(
+                    responseCode = "200",
+                    description = "Orden cancelada exitosamente."
+            ),
+            @ApiResponse(
+                    responseCode = "401",
+                    description = "El usuario no está autenticado o el token JWT no es válido.",
+                    content = @Content(
+                            schema = @Schema(
+                                    implementation = StandardErrorResponse.class
+                            )
+                    )
+            ),
+            @ApiResponse(
+                    responseCode = "404",
+                    description = "No se encontró la orden solicitada o no pertenece al usuario autenticado.",
+                    content = @Content(
+                            schema = @Schema(
+                                    implementation = StandardErrorResponse.class
+                            )
+                    )
+            ),
+            @ApiResponse(
+                    responseCode = "409",
+                    description = "La orden no puede ser cancelada porque no se encuentra en estado PENDING.",
+                    content = @Content(
+                            schema = @Schema(
+                                    implementation = StandardErrorResponse.class
+                            )
+                    )
+            ),
+            @ApiResponse(
+                    responseCode = "500",
+                    description = "Ocurrió un error interno al cancelar la orden.",
+                    content = @Content(
+                            schema = @Schema(
+                                    implementation = StandardErrorResponse.class
+                            )
+                    )
+            )
+    })
+    ResponseEntity<StandardResponse<OrderResponse>> cancelOrder(
+            @Parameter(
+                    description = "Identificador único de la orden que se desea cancelar.",
+                    required = true
+            )
+            UUID id,
+
+            @Parameter(
+                    description = "UUID del usuario autenticado obtenido desde el JWT.",
+                    hidden = true
+            )
+            UUID userId
+    );
 }

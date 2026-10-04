@@ -11,6 +11,7 @@ import cl.eventpass.ms_orders.entity.OrderEntity;
 import cl.eventpass.ms_orders.entity.OrderItemEntity;
 import cl.eventpass.ms_orders.enums.OrderStatus;
 import cl.eventpass.ms_orders.enums.PaymentStatus;
+import cl.eventpass.ms_orders.exception.BusinessRuleException;
 import cl.eventpass.ms_orders.exception.InvalidRequestException;
 import cl.eventpass.ms_orders.exception.ResourceNotFoundException;
 import cl.eventpass.ms_orders.repository.OrderItemRepository;
@@ -218,6 +219,47 @@ public class OrderServiceImpl implements OrderService {
         return orderRepository
                 .findAllByUserId(userId, pageable)
                 .map(this::toOrderResponse);
+    }
+
+    @Override
+    @Transactional
+    public OrderResponse cancelOrder(UUID orderId, UUID userId) {
+
+        OrderEntity order =
+                orderRepository.findByIdAndUserId(orderId, userId)
+                        .orElseThrow(() -> new ResourceNotFoundException(
+                                "No se encontró la orden solicitada."
+                        ));
+
+        if (order.getStatus() != OrderStatus.PENDING) {
+            throw new BusinessRuleException(
+                    "Solo se pueden cancelar órdenes en estado PENDING."
+            );
+        }
+
+        List<OrderItemEntity> orderItems =
+                orderItemRepository.findAllByOrderId(order.getId());
+
+        for (OrderItemEntity item : orderItems) {
+
+            CapacityReleaseRequest request =
+                    new CapacityReleaseRequest(
+                            item.getTicketCategoryId(),
+                            item.getQuantity()
+                    );
+
+            eventsClient.releaseCapacity(
+                    item.getEventId(),
+                    request
+            );
+        }
+
+        order.setStatus(OrderStatus.CANCELLED);
+
+        OrderEntity savedOrder =
+                orderRepository.save(order);
+
+        return toOrderResponse(savedOrder);
     }
 
     private OrderResponse toOrderResponse(

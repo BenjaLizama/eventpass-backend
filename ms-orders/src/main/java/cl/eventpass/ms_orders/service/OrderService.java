@@ -11,4 +11,5 @@ public interface OrderService {
     OrderResponse createOrder(OrderCreateRequest request, UUID userId);
     OrderResponse getOrderById( UUID orderId, UUID userId );
     Page<OrderResponse> getMyOrders(UUID userId, Pageable pageable);
+    OrderResponse cancelOrder(UUID orderId, UUID userId);
 }

@@ -1,0 +1,16 @@
+server:
+  port: ${PORT:8084}
+
+spring:
+  data:
+    mongodb:
+      uri: ${TICKETS_MONGODB_URI}
+
+  cloud:
+    aws:
+      region:
+        static: ${AWS_REGION}
+
+      credentials:
+        access-key: ${AWS_ACCESS_KEY_ID}
+        secret-key: ${AWS_SECRET_ACCESS_KEY}

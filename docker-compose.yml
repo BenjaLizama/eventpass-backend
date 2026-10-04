@@ -96,6 +96,38 @@ services:
       - eventpass
 
   # ================================================
+  #  DATA - MS-TICKETS
+  # ================================================
+  mongodb-tickets:
+    image: mongo:8
+    restart: unless-stopped
+
+    environment:
+      MONGO_INITDB_DATABASE: ${MONGODB_TICKETS_DATABASE}
+
+    ports:
+      - "${MONGODB_TICKETS_PORT}:27017"
+
+    volumes:
+      - mongodb_tickets_data:/data/db
+
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "mongosh",
+          "--eval",
+          "db.adminCommand('ping')"
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+    networks:
+      - eventpass
+
+  # ================================================
   #  REDIS
   # ================================================
   redis:
@@ -176,6 +208,8 @@ services:
     environment:
       SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE}
 
+      JWT_SECRET: ${JWT_SECRET}
+
       AUTH_DB_URL: jdbc:postgresql://postgres-auth:5432/${POSTGRES_AUTH_DB}
       AUTH_DB_USERNAME: ${POSTGRES_AUTH_USER}
       AUTH_DB_PASSWORD: ${POSTGRES_AUTH_PASSWORD}
@@ -221,6 +255,8 @@ services:
 
     environment:
       SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE}
+
+      JWT_SECRET: ${JWT_SECRET}
 
       EVENTS_DB_URL: jdbc:postgresql://postgres-events:5432/${POSTGRES_EVENTS_DB}
       EVENTS_DB_USERNAME: ${POSTGRES_EVENTS_USER}
@@ -271,6 +307,8 @@ services:
     environment:
       SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE}
 
+      JWT_SECRET: ${JWT_SECRET}
+
       ORDERS_DB_URL: jdbc:postgresql://postgres-orders:5432/${POSTGRES_ORDERS_DB}
       ORDERS_DB_USERNAME: ${POSTGRES_ORDERS_USER}
       ORDERS_DB_PASSWORD: ${POSTGRES_ORDERS_PASSWORD}
@@ -316,6 +354,57 @@ services:
     networks:
       - eventpass
 
+  # ================================================
+  #  MS-TICKETS
+  # ================================================
+  ms-tickets:
+    build:
+      context: ./ms-tickets
+      dockerfile: Dockerfile
+
+    restart: unless-stopped
+
+    environment:
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE}
+
+      JWT_SECRET: ${JWT_SECRET}
+
+      TICKETS_MONGODB_URI: mongodb://mongodb-tickets:27017/${MONGODB_TICKETS_DATABASE}
+
+      AWS_REGION: ${AWS_REGION}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
+      AWS_SQS_ENDPOINT: http://localstack:4566
+
+      ORDER_COMPLETED_QUEUE: eventpass-orders-completed-queue
+
+    ports:
+      - "8084:8084"
+
+    depends_on:
+      mongodb-tickets:
+        condition: service_healthy
+      localstack:
+        condition: service_healthy
+
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "wget",
+          "--spider",
+          "-q",
+          "http://localhost:8084/actuator/health"
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+    networks:
+      - eventpass
+
+
 # ================================================
 #  VOLUMES
 # ================================================
@@ -328,6 +417,9 @@ volumes:
 
   postgres_orders_data:
     name: eventpass_postgres_orders_data
+
+  mongodb_tickets_data:
+    name: eventpass_mongodb_tickets_data
 
   redis_data:
     name: eventpass_redis_data

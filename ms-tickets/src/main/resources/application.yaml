@@ -1,0 +1,43 @@
+spring:
+  application:
+    name: ms-tickets
+
+  profiles:
+    active: ${SPRING_PROFILES_ACTIVE:dev}
+
+  threads:
+    virtual:
+      enabled: true
+
+  data:
+    mongodb:
+      auto-index-creation: true
+
+application:
+  security:
+    jwt:
+      secret-key: ${JWT_SECRET:404E635266556A586E3272357538782F413F4428472B4B6250655368566D5971}
+
+app:
+  sqs:
+    queues:
+      order-completed: ${ORDER_COMPLETED_QUEUE:eventpass-orders-completed-queue}
+
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+
+  swagger-ui:
+    path: /swagger-ui.html
+    tags-sorter: alpha
+    operations-sorter: alpha
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+
+  endpoint:
+    health:
+      show-details: always

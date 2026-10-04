@@ -1,0 +1,19 @@
+server:
+  port: 8084
+
+spring:
+  data:
+    mongodb:
+      uri: ${TICKETS_MONGODB_URI:mongodb://localhost:27017/eventpass_tickets}
+
+  cloud:
+    aws:
+      region:
+        static: ${AWS_REGION:us-east-1}
+
+      credentials:
+        access-key: ${AWS_ACCESS_KEY_ID:test}
+        secret-key: ${AWS_SECRET_ACCESS_KEY:test}
+
+      sqs:
+        endpoint: ${AWS_SQS_ENDPOINT:http://localhost:4566}

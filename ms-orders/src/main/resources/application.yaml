@@ -1,0 +1,47 @@
+spring:
+  application:
+    name: ms-orders
+
+  profiles:
+    active: ${SPRING_PROFILES_ACTIVE:dev}
+
+  threads:
+    virtual:
+      enabled: true
+
+  jpa:
+    open-in-view: false
+
+application:
+  security:
+    jwt:
+      secret-key: ${JWT_SECRET:404E635266556A586E3272357538782F413F4428472B4B6250655368566D5971}
+
+app:
+  services:
+    auth:
+      base-url: ${AUTH_SERVICE_URL:http://localhost:8081}
+      client-id: ${MS_ORDERS_CLIENT_ID:eventpass-ms-orders}
+      client-secret: ${MS_ORDERS_CLIENT_SECRET:cambiame-ms-orders-secret}
+
+    events:
+      base-url: ${EVENTS_SERVICE_URL:http://localhost:8082}
+
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+
+  swagger-ui:
+    path: /swagger-ui.html
+    tags-sorter: alpha
+    operations-sorter: alpha
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+
+  endpoint:
+    health:
+      show-details: always

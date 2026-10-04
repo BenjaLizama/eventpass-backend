@@ -1,0 +1,344 @@
+services:
+  # ================================================
+  #  DATA - MS-AUTH
+  # ================================================
+  postgres-auth:
+    image: postgres:16-alpine
+    restart: unless-stopped
+
+    environment:
+      POSTGRES_DB: ${POSTGRES_AUTH_DB}
+      POSTGRES_USER: ${POSTGRES_AUTH_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_AUTH_PASSWORD}
+
+    ports:
+      - "${POSTGRES_AUTH_PORT}:5432"
+
+    volumes:
+      - postgres_auth_data:/var/lib/postgresql/data
+
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U ${POSTGRES_AUTH_USER} -d ${POSTGRES_AUTH_DB}"
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+    networks:
+      - eventpass
+
+  # ================================================
+  #  DATA - MS-EVENTS
+  # ================================================
+  postgres-events:
+    image: postgres:16-alpine
+    restart: unless-stopped
+
+    environment:
+      POSTGRES_DB: ${POSTGRES_EVENTS_DB}
+      POSTGRES_USER: ${POSTGRES_EVENTS_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_EVENTS_PASSWORD}
+
+    ports:
+      - "${POSTGRES_EVENTS_PORT}:5432"
+
+    volumes:
+      - postgres_events_data:/var/lib/postgresql/data
+
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U ${POSTGRES_EVENTS_USER} -d ${POSTGRES_EVENTS_DB}"
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+    networks:
+      - eventpass
+
+  # ================================================
+  #  DATA - MS-ORDERS
+  # ================================================
+  postgres-orders:
+    image: postgres:16-alpine
+    restart: unless-stopped
+
+    environment:
+      POSTGRES_DB: ${POSTGRES_ORDERS_DB}
+      POSTGRES_USER: ${POSTGRES_ORDERS_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_ORDERS_PASSWORD}
+
+    ports:
+      - "${POSTGRES_ORDERS_PORT}:5432"
+
+    volumes:
+      - postgres_orders_data:/var/lib/postgresql/data
+
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U ${POSTGRES_ORDERS_USER} -d ${POSTGRES_ORDERS_DB}"
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+    networks:
+      - eventpass
+
+  # ================================================
+  #  REDIS
+  # ================================================
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+
+    command:
+      - redis-server
+      - --appendonly
+      - "yes"
+
+    ports:
+      - "${REDIS_PORT}:6379"
+
+    volumes:
+      - redis_data:/data
+
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "redis-cli",
+          "ping"
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 5s
+
+    networks:
+      - eventpass
+
+  # ================================================
+  #  LOCALSTACK
+  # ================================================
+  localstack:
+    image: localstack/localstack:3.4.0
+    restart: unless-stopped
+
+    environment:
+      AWS_DEFAULT_REGION: ${AWS_REGION}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
+
+    ports:
+      - "${LOCALSTACK_PORT}:4566"
+
+    volumes:
+      - localstack_data:/var/lib/localstack
+      - ./scripts/localstack:/etc/localstack/init/ready.d
+
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "curl",
+          "-f",
+          "http://localhost:4566/_localstack/health"
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+
+    networks:
+      - eventpass
+
+  # ================================================
+  #  MS-AUTH
+  # ================================================
+  ms-auth:
+    build:
+      context: ./ms-auth
+      dockerfile: Dockerfile
+
+    restart: unless-stopped
+
+    environment:
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE}
+
+      AUTH_DB_URL: jdbc:postgresql://postgres-auth:5432/${POSTGRES_AUTH_DB}
+      AUTH_DB_USERNAME: ${POSTGRES_AUTH_USER}
+      AUTH_DB_PASSWORD: ${POSTGRES_AUTH_PASSWORD}
+
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+
+      AWS_REGION: ${AWS_REGION}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
+
+    ports:
+      - "8081:8081"
+
+    depends_on:
+      postgres-auth:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "wget",
+          "--spider",
+          "-q",
+          "http://localhost:8081/actuator/health"
+        ]
+
+    networks:
+      - eventpass
+
+  # ================================================
+  #  MS-EVENTS
+  # ================================================
+  ms-events:
+    build:
+      context: ./ms-events
+      dockerfile: Dockerfile
+
+    restart: unless-stopped
+
+    environment:
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE}
+
+      EVENTS_DB_URL: jdbc:postgresql://postgres-events:5432/${POSTGRES_EVENTS_DB}
+      EVENTS_DB_USERNAME: ${POSTGRES_EVENTS_USER}
+      EVENTS_DB_PASSWORD: ${POSTGRES_EVENTS_PASSWORD}
+
+      AWS_REGION: ${AWS_REGION}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
+
+      AWS_SQS_ENDPOINT: http://localstack:4566
+
+    ports:
+      - "8082:8082"
+
+    depends_on:
+      postgres-events:
+        condition: service_healthy
+      localstack:
+        condition: service_healthy
+
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "wget",
+          "--spider",
+          "-q",
+          "http://localhost:8082/actuator/health"
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+    networks:
+      - eventpass
+
+  # ================================================
+  #  MS-ORDERS
+  # ================================================
+  ms-orders:
+    build:
+      context: ./ms-orders
+      dockerfile: Dockerfile
+
+    restart: unless-stopped
+
+    environment:
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE}
+
+      ORDERS_DB_URL: jdbc:postgresql://postgres-orders:5432/${POSTGRES_ORDERS_DB}
+      ORDERS_DB_USERNAME: ${POSTGRES_ORDERS_USER}
+      ORDERS_DB_PASSWORD: ${POSTGRES_ORDERS_PASSWORD}
+
+      AWS_REGION: ${AWS_REGION}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
+      AWS_SQS_ENDPOINT: http://localstack:4566
+
+      AUTH_SERVICE_URL: http://ms-auth:8081
+      EVENTS_SERVICE_URL: http://ms-events:8082
+
+      MS_ORDERS_CLIENT_ID: ${MS_ORDERS_CLIENT_ID}
+      MS_ORDERS_CLIENT_SECRET: ${MS_ORDERS_CLIENT_SECRET}
+
+    ports:
+      - "8083:8083"
+
+    depends_on:
+      postgres-orders:
+        condition: service_healthy
+      ms-auth:
+        condition: service_healthy
+      ms-events:
+        condition: service_healthy
+      localstack:
+        condition: service_healthy
+
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "wget",
+          "--spider",
+          "-q",
+          "http://localhost:8083/actuator/health"
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+    networks:
+      - eventpass
+
+# ================================================
+#  VOLUMES
+# ================================================
+volumes:
+  postgres_auth_data:
+    name: eventpass_postgres_auth_data
+
+  postgres_events_data:
+    name: eventpass_postgres_events_data
+
+  postgres_orders_data:
+    name: eventpass_postgres_orders_data
+
+  redis_data:
+    name: eventpass_redis_data
+
+  localstack_data:
+    name: eventpass_localstack_data
+
+# ================================================
+#  NETWORK
+# ================================================
+networks:
+  eventpass:
+    name: eventpass_network
+    driver: bridge

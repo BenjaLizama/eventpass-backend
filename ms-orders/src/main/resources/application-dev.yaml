@@ -1,0 +1,44 @@
+server:
+  port: 8083
+
+spring:
+  datasource:
+    url: ${ORDERS_DB_URL:jdbc:postgresql://localhost:5434/eventpass_orders}
+    username: ${ORDERS_DB_USERNAME:postgres}
+    password: ${ORDERS_DB_PASSWORD:postgrespassword}
+    driver-class-name: org.postgresql.Driver
+
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
+
+  cloud:
+    aws:
+      region:
+        static: ${AWS_REGION:us-east-1}
+
+      credentials:
+        access-key: ${AWS_ACCESS_KEY_ID:test}
+        secret-key: ${AWS_SECRET_ACCESS_KEY:test}
+
+      sqs:
+        endpoint: ${AWS_SQS_ENDPOINT:http://localhost:4566}
+
+app:
+  services:
+    events:
+      base-url: ${EVENTS_SERVICE_URL:http://localhost:8082}
+
+  sqs:
+    queues:
+      order-created: "eventpass-orders-created-queue"
+      order-completed: "eventpass-orders-completed-queue"
+
+  payment:
+    mock:
+      result: APPROVED # Solo para pruebas.

@@ -1,0 +1,34 @@
+server:
+  port: 8082
+
+spring:
+  datasource:
+    url: ${EVENTS_DB_URL:jdbc:postgresql://localhost:5433/eventpass_events}
+    username: ${EVENTS_DB_USERNAME:postgres}
+    password: ${EVENTS_DB_PASSWORD:postgrespassword}
+    driver-class-name: org.postgresql.Driver
+
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
+
+  cloud:
+    aws:
+      region:
+        static: ${AWS_REGION:us-east-1}
+      credentials:
+        access-key: ${AWS_ACCESS_KEY_ID:test}
+        secret-key: ${AWS_SECRET_ACCESS_KEY:test}
+      sqs:
+        endpoint: ${AWS_SQS_ENDPOINT:http://localhost:4566}
+
+app:
+  sqs:
+    queues:
+      event-published: "eventpass-events-published-queue"
+      event-cancelled: "eventpass-events-cancelled-queue"

@@ -2,9 +2,11 @@ package cl.eventpass.ms_events.controller;
 
 import cl.eventpass.ms_events.config.annotation.CurrentUserId;
 import cl.eventpass.ms_events.controller.docs.EventsControllerDocs;
+import cl.eventpass.ms_events.dto.request.CapacityReleaseRequest;
 import cl.eventpass.ms_events.dto.request.CapacityReservationRequest;
 import cl.eventpass.ms_events.dto.request.EventCreateRequest;
 import cl.eventpass.ms_events.dto.request.EventUpdateRequest;
+import cl.eventpass.ms_events.dto.response.CapacityReleaseResponse;
 import cl.eventpass.ms_events.dto.response.CapacityReservationResponse;
 import cl.eventpass.ms_events.dto.response.EventResponse;
 import cl.eventpass.ms_events.dto.response.StandardResponse;
@@ -136,7 +138,9 @@ public class EventsController implements EventsControllerDocs {
                 ));
     }
 
+    @Override
     @PatchMapping("/{eventId}/reserve")
+    @PreAuthorize("hasRole('INTERNAL_SERVICE')")
     public ResponseEntity<StandardResponse<CapacityReservationResponse>> reserveCapacity(
             @PathVariable UUID eventId,
             @Valid @RequestBody CapacityReservationRequest request
@@ -147,5 +151,21 @@ public class EventsController implements EventsControllerDocs {
                 request.quantity()
         );
         return ResponseEntity.ok(StandardResponse.ok("Aforo reservado con éxito.", response));
+    }
+
+    @Override
+    @PatchMapping("/{eventId}/release")
+    @PreAuthorize("hasRole('INTERNAL_SERVICE')")
+    public ResponseEntity<StandardResponse<CapacityReleaseResponse>> releaseCapacity(
+            @PathVariable UUID eventId,
+            @Valid @RequestBody CapacityReleaseRequest request
+    ) {
+        CapacityReleaseResponse response = eventService.releaseCapacity(
+                eventId,
+                request.ticketCategoryId(),
+                request.quantity()
+        );
+
+        return ResponseEntity.ok(StandardResponse.ok("Aforo liberado con éxito.", response));
     }
 }

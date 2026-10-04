@@ -1,9 +1,10 @@
 package cl.eventpass.ms_events.controller.docs;
 
-import cl.eventpass.ms_events.config.annotation.CurrentUserId;
+import cl.eventpass.ms_events.dto.request.CapacityReleaseRequest;
 import cl.eventpass.ms_events.dto.request.CapacityReservationRequest;
 import cl.eventpass.ms_events.dto.request.EventCreateRequest;
 import cl.eventpass.ms_events.dto.request.EventUpdateRequest;
+import cl.eventpass.ms_events.dto.response.CapacityReleaseResponse;
 import cl.eventpass.ms_events.dto.response.CapacityReservationResponse;
 import cl.eventpass.ms_events.dto.response.EventResponse;
 import cl.eventpass.ms_events.dto.response.StandardErrorResponse;
@@ -91,7 +92,6 @@ public interface EventsControllerDocs {
             EventCreateRequest request,
 
             @Parameter(hidden = true)
-            @CurrentUserId
             UUID organizerId
     );
 
@@ -191,7 +191,6 @@ public interface EventsControllerDocs {
     })
     ResponseEntity<StandardResponse<Page<EventResponse>>> getOrganizerEvents(
             @Parameter(hidden = true)
-            @CurrentUserId
             UUID organizerId,
 
             @PageableDefault(
@@ -271,7 +270,6 @@ public interface EventsControllerDocs {
             EventUpdateRequest request,
 
             @Parameter(hidden = true)
-            @CurrentUserId
             UUID userId
     );
 
@@ -335,7 +333,6 @@ public interface EventsControllerDocs {
             UUID id,
 
             @Parameter(hidden = true)
-            @CurrentUserId
             UUID userId
     );
 
@@ -399,14 +396,16 @@ public interface EventsControllerDocs {
             UUID id,
 
             @Parameter(hidden = true)
-            @CurrentUserId
             UUID userId
     );
 
+
     @Operation(
             summary = "Reservar capacidad de entradas",
-            description = "Reserva temporalmente una cantidad de entradas de una categoría "
-                    + "específica para un evento."
+            description = "Reserva capacidad disponible de una categoría de tickets "
+                    + "para un evento. Este endpoint es de uso interno entre microservicios "
+                    + "y debe ser invocado utilizando un Service JWT con el rol "
+                    + "ROLE_INTERNAL_SERVICE."
     )
     @SecurityRequirement(name = "bearerAuth")
     @ApiResponses({
@@ -416,7 +415,7 @@ public interface EventsControllerDocs {
             ),
             @ApiResponse(
                     responseCode = "400",
-                    description = "La cantidad solicitada no es válida o no existe capacidad suficiente.",
+                    description = "La cantidad solicitada no es válida.",
                     content = @Content(
                             schema = @Schema(
                                     implementation = StandardErrorResponse.class
@@ -425,7 +424,16 @@ public interface EventsControllerDocs {
             ),
             @ApiResponse(
                     responseCode = "401",
-                    description = "No existe una autenticación válida, el token ha expirado o no fue proporcionado.",
+                    description = "No existe un Service JWT válido, el token ha expirado o no fue proporcionado.",
+                    content = @Content(
+                            schema = @Schema(
+                                    implementation = StandardErrorResponse.class
+                            )
+                    )
+            ),
+            @ApiResponse(
+                    responseCode = "403",
+                    description = "El token autenticado no posee el rol ROLE_INTERNAL_SERVICE.",
                     content = @Content(
                             schema = @Schema(
                                     implementation = StandardErrorResponse.class
@@ -434,7 +442,16 @@ public interface EventsControllerDocs {
             ),
             @ApiResponse(
                     responseCode = "404",
-                    description = "No se encontró el evento o la categoría de entrada indicada.",
+                    description = "No se encontró el evento o la categoría de ticket indicada.",
+                    content = @Content(
+                            schema = @Schema(
+                                    implementation = StandardErrorResponse.class
+                            )
+                    )
+            ),
+            @ApiResponse(
+                    responseCode = "409",
+                    description = "No existe suficiente capacidad disponible para realizar la reserva.",
                     content = @Content(
                             schema = @Schema(
                                     implementation = StandardErrorResponse.class
@@ -450,7 +467,87 @@ public interface EventsControllerDocs {
             @PathVariable
             UUID eventId,
 
+            @Parameter(
+                    description = "Datos necesarios para reservar capacidad.",
+                    required = true
+            )
             @RequestBody
             CapacityReservationRequest request
+    );
+
+
+    @Operation(
+            summary = "Liberar capacidad de entradas",
+            description = "Libera capacidad previamente reservada de una categoría "
+                    + "de tickets para un evento. Este endpoint es de uso interno "
+                    + "entre microservicios y debe ser invocado utilizando un Service JWT "
+                    + "con el rol ROLE_INTERNAL_SERVICE."
+    )
+    @SecurityRequirement(name = "bearerAuth")
+    @ApiResponses({
+            @ApiResponse(
+                    responseCode = "200",
+                    description = "Capacidad liberada exitosamente."
+            ),
+            @ApiResponse(
+                    responseCode = "400",
+                    description = "La cantidad solicitada no es válida.",
+                    content = @Content(
+                            schema = @Schema(
+                                    implementation = StandardErrorResponse.class
+                            )
+                    )
+            ),
+            @ApiResponse(
+                    responseCode = "401",
+                    description = "No existe un Service JWT válido, el token ha expirado o no fue proporcionado.",
+                    content = @Content(
+                            schema = @Schema(
+                                    implementation = StandardErrorResponse.class
+                            )
+                    )
+            ),
+            @ApiResponse(
+                    responseCode = "403",
+                    description = "El token autenticado no posee el rol ROLE_INTERNAL_SERVICE.",
+                    content = @Content(
+                            schema = @Schema(
+                                    implementation = StandardErrorResponse.class
+                            )
+                    )
+            ),
+            @ApiResponse(
+                    responseCode = "404",
+                    description = "No se encontró el evento o la categoría de ticket indicada.",
+                    content = @Content(
+                            schema = @Schema(
+                                    implementation = StandardErrorResponse.class
+                            )
+                    )
+            ),
+            @ApiResponse(
+                    responseCode = "409",
+                    description = "La capacidad disponible no permite realizar la liberación solicitada.",
+                    content = @Content(
+                            schema = @Schema(
+                                    implementation = StandardErrorResponse.class
+                            )
+                    )
+            )
+    })
+    ResponseEntity<StandardResponse<CapacityReleaseResponse>> releaseCapacity(
+            @Parameter(
+                    description = "Identificador único del evento.",
+                    required = true
+            )
+            @PathVariable
+            UUID eventId,
+
+            @Parameter(
+                    description = "Datos necesarios para liberar capacidad.",
+                    required = true
+            )
+            @RequestBody
+            CapacityReleaseRequest request
     );
 }

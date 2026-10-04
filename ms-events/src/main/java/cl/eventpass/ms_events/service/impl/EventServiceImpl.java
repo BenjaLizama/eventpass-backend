@@ -3,6 +3,7 @@ package cl.eventpass.ms_events.service.impl;
 import cl.eventpass.ms_events.dto.request.EventCreateRequest;
 import cl.eventpass.ms_events.dto.request.EventUpdateRequest;
 import cl.eventpass.ms_events.dto.request.TicketCategoryRequest;
+import cl.eventpass.ms_events.dto.response.CapacityReleaseResponse;
 import cl.eventpass.ms_events.dto.response.CapacityReservationResponse;
 import cl.eventpass.ms_events.dto.response.EventResponse;
 import cl.eventpass.ms_events.entity.EventEntity;
@@ -164,6 +165,59 @@ public class EventServiceImpl implements EventService {
         }
 
         return new CapacityReservationResponse(eventId, quantity, true);
+    }
+
+    @Override
+    @Transactional
+    public CapacityReleaseResponse releaseCapacity(
+            UUID eventId,
+            UUID ticketCategoryId,
+            Integer quantity
+    ) {
+        EventEntity event = eventRepository.findById(eventId)
+                .orElseThrow(() ->
+                        new ResourceNotFoundException(
+                                "No se encontró el evento solicitado."
+                        )
+                );
+
+        if (event.isDeleted()) {
+            throw new ResourceNotFoundException(
+                    "No se encontró el evento solicitado."
+            );
+        }
+
+        TicketCategoryEntity ticketCategory =
+                ticketCategoryRepository.findById(ticketCategoryId)
+                        .orElseThrow(() ->
+                                new ResourceNotFoundException(
+                                        "No se encontró la categoría de ticket solicitada."
+                                )
+                        );
+
+        if (!ticketCategory.getEvent().getId().equals(eventId)) {
+            throw new IllegalArgumentException(
+                    "La categoría de ticket no pertenece al evento indicado."
+            );
+        }
+
+        int updatedRows =
+                ticketCategoryRepository.incrementAvailableCapacity(
+                        ticketCategoryId,
+                        quantity
+                );
+
+        if (updatedRows == 0) {
+            throw new IllegalStateException(
+                    "No fue posible liberar el aforo reservado."
+            );
+        }
+
+        return new CapacityReleaseResponse(
+                eventId,
+                quantity,
+                true
+        );
     }
 
     @Override

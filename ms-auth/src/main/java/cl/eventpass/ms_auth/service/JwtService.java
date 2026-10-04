@@ -1,5 +1,6 @@
 package cl.eventpass.ms_auth.service;
 
+import cl.eventpass.ms_auth.enums.Role;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.io.Decoders;
@@ -29,6 +30,9 @@ public class JwtService {
 
     @Value("${application.security.jwt.refresh-token.expiration}")
     private long refreshExpiration;
+
+    @Value("${application.security.jwt.service-token.expiration}")
+    private long serviceTokenExpiration;
 
     private final TokenBlacklistService tokenBlacklistService;
     private final SessionService sessionService;
@@ -121,6 +125,53 @@ public class JwtService {
                 userDetails,
                 refreshExpiration
         );
+    }
+
+    public String generateServiceToken(
+            String serviceName,
+            Role role
+    ) {
+        Map<String, Object> extraClaims = new HashMap<>();
+
+        extraClaims.put(
+                "authorities",
+                role.getAuthorities()
+                        .stream()
+                        .map(GrantedAuthority::getAuthority)
+                        .toList()
+        );
+
+        extraClaims.put("tokenType", "SERVICE");
+        extraClaims.put("serviceName", serviceName);
+
+        return buildServiceToken(
+                extraClaims,
+                serviceName,
+                serviceTokenExpiration
+        );
+    }
+
+    private String buildServiceToken(
+            Map<String, Object> extraClaims,
+            String serviceName,
+            long expiration
+    ) {
+        Date now = new Date();
+
+        return Jwts.builder()
+                .claims(extraClaims)
+                .subject(serviceName)
+                .id(UUID.randomUUID().toString())
+                .issuedAt(now)
+                .expiration(
+                        new Date(now.getTime() + expiration)
+                )
+                .signWith(getSignInKey())
+                .compact();
+    }
+
+    public long getServiceTokenExpirationSeconds() {
+        return serviceTokenExpiration / 1000;
     }
 
     private String buildToken(

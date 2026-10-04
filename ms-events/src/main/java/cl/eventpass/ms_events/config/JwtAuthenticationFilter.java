@@ -47,29 +47,52 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         try {
             Claims claims = extractAllClaims(jwt);
 
-            /*
-             * userId = identificador real del usuario.
-             *
-             * IMPORTANTE:
-             * sid corresponde al identificador de sesión y NO debe
-             * utilizarse como identidad del usuario.
-             */
-            String userId = claims.get("userId", String.class);
-
-            if (userId == null || userId.isBlank()) {
-                throw new IllegalArgumentException(
-                        "El JWT no contiene un userId válido."
-                );
-            }
-
             if (SecurityContextHolder.getContext().getAuthentication() == null) {
 
                 List<SimpleGrantedAuthority> grantedAuthorities =
                         extractAuthorities(claims);
 
+                logger.info(
+                        "JWT tokenType=" + claims.get("tokenType", String.class)
+                                + ", serviceName=" + claims.get("serviceName", String.class)
+                                + ", authorities=" + grantedAuthorities
+                );
+
+                String tokenType =
+                        claims.get("tokenType", String.class);
+
+                String principal;
+
+                if ("SERVICE".equals(tokenType)) {
+
+                    String serviceName =
+                            claims.get("serviceName", String.class);
+
+                    if (serviceName == null || serviceName.isBlank()) {
+                        throw new IllegalArgumentException(
+                                "El SERVICE JWT no contiene un serviceName válido."
+                        );
+                    }
+
+                    principal = serviceName;
+
+                } else {
+
+                    String userId =
+                            claims.get("userId", String.class);
+
+                    if (userId == null || userId.isBlank()) {
+                        throw new IllegalArgumentException(
+                                "El JWT de usuario no contiene un userId válido."
+                        );
+                    }
+
+                    principal = userId;
+                }
+
                 UsernamePasswordAuthenticationToken authentication =
                         new UsernamePasswordAuthenticationToken(
-                                userId,
+                                principal,
                                 null,
                                 grantedAuthorities
                         );

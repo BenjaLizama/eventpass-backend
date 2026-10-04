@@ -51,6 +51,21 @@ public class GlobalExceptionHandler {
         );
     }
 
+    @ExceptionHandler(InvalidServiceCredentialsException.class)
+    public ResponseEntity<StandardErrorResponse> handleInvalidServiceCredentials(
+            InvalidServiceCredentialsException ex,
+            HttpServletRequest request
+    ) {
+        return buildErrorResponse(
+                HttpStatus.UNAUTHORIZED,
+                "INVALID_SERVICE_CREDENTIALS",
+                ex.getMessage(),
+                ex,
+                request,
+                null
+        );
+    }
+
     @ExceptionHandler(BadCredentialsException.class)
     public ResponseEntity<StandardErrorResponse> handleBadCredentials(
             BadCredentialsException ex,

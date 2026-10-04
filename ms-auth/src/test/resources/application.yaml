@@ -40,3 +40,6 @@ application:
 
       refresh-token:
         expiration: 86400000
+        
+      service-token:
+        expiration: 3600000 

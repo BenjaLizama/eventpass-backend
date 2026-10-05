@@ -9,7 +9,34 @@ on:
       - develop
 
 jobs:
-  tests:
+  changes:
+    name: Detect changed services
+    runs-on: ubuntu-latest
+
+    outputs:
+      ms-auth: ${{ steps.filter.outputs.ms-auth }}
+      ms-orders: ${{ steps.filter.outputs.ms-orders }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Detect changed services
+        uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            ms-auth:
+              - 'ms-auth/**'
+              - '.github/workflows/tests.yml'
+            ms-orders:
+              - 'ms-orders/**'
+              - '.github/workflows/tests.yml'
+
+  ms-auth-tests:
+    name: ms-auth Tests
+    needs: changes
+    if: needs.changes.outputs.ms-auth == 'true'
     runs-on: ubuntu-latest
 
     steps:
@@ -24,6 +51,28 @@ jobs:
           cache: maven
           cache-dependency-path: ms-auth/pom.xml
 
-      - name: Run tests
+      - name: Run ms-auth tests
         working-directory: ms-auth
+        run: ./mvnw clean test
+
+  ms-orders-tests:
+    name: ms-orders Tests
+    needs: changes
+    if: needs.changes.outputs.ms-orders == 'true'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+          cache-dependency-path: ms-orders/pom.xml
+
+      - name: Run ms-orders tests
+        working-directory: ms-orders
         run: ./mvnw clean test

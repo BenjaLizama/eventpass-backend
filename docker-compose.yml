@@ -1,6 +1,6 @@
 services:
   # ================================================
-  #  DATA - MS-AUTH
+  # DATA - MS-AUTH
   # ================================================
   postgres-auth:
     image: postgres:16-alpine
@@ -31,8 +31,9 @@ services:
     networks:
       - eventpass
 
+
   # ================================================
-  #  DATA - MS-EVENTS
+  # DATA - MS-EVENTS
   # ================================================
   postgres-events:
     image: postgres:16-alpine
@@ -63,8 +64,9 @@ services:
     networks:
       - eventpass
 
+
   # ================================================
-  #  DATA - MS-ORDERS
+  # DATA - MS-ORDERS
   # ================================================
   postgres-orders:
     image: postgres:16-alpine
@@ -95,8 +97,9 @@ services:
     networks:
       - eventpass
 
+
   # ================================================
-  #  DATA - MS-TICKETS
+  # DATA - MS-TICKETS
   # ================================================
   mongodb-tickets:
     image: mongo:7
@@ -127,8 +130,9 @@ services:
     networks:
       - eventpass
 
+
   # ================================================
-  #  REDIS
+  # REDIS
   # ================================================
   redis:
     image: redis:7-alpine
@@ -160,8 +164,9 @@ services:
     networks:
       - eventpass
 
+
   # ================================================
-  #  LOCALSTACK
+  # LOCALSTACK
   # ================================================
   localstack:
     image: localstack/localstack:3.4.0
@@ -195,8 +200,9 @@ services:
     networks:
       - eventpass
 
+
   # ================================================
-  #  MS-AUTH
+  # MS-AUTH
   # ================================================
   ms-auth:
     build:
@@ -239,12 +245,17 @@ services:
           "-q",
           "http://localhost:8081/actuator/health"
         ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
 
     networks:
       - eventpass
 
+
   # ================================================
-  #  MS-EVENTS
+  # MS-EVENTS
   # ================================================
   ms-events:
     build:
@@ -265,7 +276,6 @@ services:
       AWS_REGION: ${AWS_REGION}
       AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
       AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
-
       AWS_SQS_ENDPOINT: http://localstack:4566
 
     ports:
@@ -294,8 +304,9 @@ services:
     networks:
       - eventpass
 
+
   # ================================================
-  #  MS-ORDERS
+  # MS-ORDERS
   # ================================================
   ms-orders:
     build:
@@ -354,8 +365,9 @@ services:
     networks:
       - eventpass
 
+
   # ================================================
-  #  MS-TICKETS
+  # MS-TICKETS
   # ================================================
   ms-tickets:
     build:
@@ -370,6 +382,7 @@ services:
       JWT_SECRET: ${JWT_SECRET}
 
       TICKETS_MONGODB_URI: mongodb://mongodb-tickets:27017/${MONGODB_TICKETS_DATABASE}
+      MONGODB_TICKETS_DATABASE: ${MONGODB_TICKETS_DATABASE}
 
       AWS_REGION: ${AWS_REGION}
       AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
@@ -406,7 +419,7 @@ services:
 
 
 # ================================================
-#  VOLUMES
+# VOLUMES
 # ================================================
 volumes:
   postgres_auth_data:
@@ -427,8 +440,9 @@ volumes:
   localstack_data:
     name: eventpass_localstack_data
 
+
 # ================================================
-#  NETWORK
+# NETWORK
 # ================================================
 networks:
   eventpass:

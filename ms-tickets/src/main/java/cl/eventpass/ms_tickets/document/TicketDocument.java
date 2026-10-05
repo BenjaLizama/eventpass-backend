@@ -23,6 +23,11 @@ import java.util.UUID;
         name = "user_event_idx",
         def = "{'user_id':1, 'event_id': 1}"
 )
+@CompoundIndex(
+        name = "order_item_ticket_idx",
+        def = "{'order_item_id': 1, 'ticket_index': 1}",
+        unique = true
+)
 public class TicketDocument extends BaseDocument {
 
     @Field("order_id")
@@ -30,6 +35,9 @@ public class TicketDocument extends BaseDocument {
 
     @Field("order_item_id")
     private UUID orderItemId;
+
+    @Field("ticket_index")
+    private Integer ticketIndex;
 
     @Field("user_id")
     private UUID userId;

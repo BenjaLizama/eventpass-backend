@@ -3,7 +3,10 @@ server:
 
 spring:
   mongodb:
-    uri: ${TICKETS_MONGODB_URI:mongodb://localhost:27018/eventpass_tickets}
+    uri: ${TICKETS_MONGODB_URI}
+    database: ${MONGODB_TICKETS_DATABASE}
+    representation:
+      uuid: standard
 
   data:
     mongodb:
@@ -12,11 +15,11 @@ spring:
   cloud:
     aws:
       region:
-        static: ${AWS_REGION:us-east-1}
+        static: ${AWS_REGION}
 
       credentials:
-        access-key: ${AWS_ACCESS_KEY_ID:test}
-        secret-key: ${AWS_SECRET_ACCESS_KEY:test}
+        access-key: ${AWS_ACCESS_KEY_ID}
+        secret-key: ${AWS_SECRET_ACCESS_KEY}
 
       sqs:
-        endpoint: ${AWS_SQS_ENDPOINT:http://localhost:4566}
+        endpoint: ${AWS_SQS_ENDPOINT}

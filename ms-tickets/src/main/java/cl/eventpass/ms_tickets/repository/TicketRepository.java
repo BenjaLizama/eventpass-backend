@@ -14,4 +14,5 @@ public interface TicketRepository extends MongoRepository<TicketDocument, UUID> 
     List<TicketDocument> findByEventIdAndDeletedAtIsNull(UUID eventId);
     boolean existsByOrderIdAndOrderItemIdAndDeletedAtIsNull(UUID orderId, UUID orderItemId);
     List<TicketDocument> findByUserIdAndStatusAndDeletedAtIsNull(UUID userId, TicketStatus status);
+    Optional<TicketDocument> findByOrderItemIdAndTicketIndexAndDeletedAtIsNull(UUID orderItemId, Integer ticketIndex);
 }

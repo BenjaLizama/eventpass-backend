@@ -2,9 +2,15 @@ server:
   port: ${PORT:8084}
 
 spring:
+  mongodb:
+    uri: ${TICKETS_MONGODB_URI}
+    database: ${MONGODB_TICKETS_DATABASE}
+    representation:
+      uuid: standard
+
   data:
     mongodb:
-      uri: ${TICKETS_MONGODB_URI}
+      auto-index-creation: true
 
   cloud:
     aws:

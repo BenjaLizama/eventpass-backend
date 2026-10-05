@@ -35,7 +35,8 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 @SpringBootTest(
         webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
         properties = {
-                "app.payment.mock.result=REJECTED"
+                "app.payment.mock.result=REJECTED",
+                "app.orders.expiration.enabled=false"
         }
 )
 @Testcontainers

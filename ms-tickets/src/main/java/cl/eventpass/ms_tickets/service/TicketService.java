@@ -10,4 +10,6 @@ public interface TicketService {
 
     void generateTickets(OrderCompletedEvent event);
     List<TicketResponse> getMyTickets(UUID userId);
+    TicketResponse getTicketByCode(String ticketCode, UUID userId);
+    TicketResponse useTicket(String ticketCode);
 }

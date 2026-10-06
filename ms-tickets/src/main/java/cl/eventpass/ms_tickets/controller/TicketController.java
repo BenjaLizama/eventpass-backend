@@ -7,9 +7,8 @@ import cl.eventpass.ms_tickets.dto.response.TicketResponse;
 import cl.eventpass.ms_tickets.service.TicketService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 import java.util.UUID;
@@ -23,6 +22,7 @@ public class TicketController implements TicketControllerDocs {
 
     @Override
     @GetMapping("/me")
+    @PreAuthorize("hasRole('CUSTOMER')")
     public ResponseEntity<StandardResponse<List<TicketResponse>>> getMyTickets(
             @CurrentUserId UUID userId
     ) {
@@ -30,6 +30,35 @@ public class TicketController implements TicketControllerDocs {
 
         return ResponseEntity.ok(StandardResponse.ok(
                 "Recursos obtenidos con exito.",
+                response
+        ));
+    }
+
+    @Override
+    @GetMapping("/{ticketCode}")
+    @PreAuthorize("hasRole('CUSTOMER')")
+    public ResponseEntity<StandardResponse<TicketResponse>> getTicketByCode(
+            @PathVariable String ticketCode,
+            @CurrentUserId UUID userId
+    ) {
+        TicketResponse response = ticketService.getTicketByCode(ticketCode, userId);
+
+        return ResponseEntity.ok(StandardResponse.ok(
+                "Ticket obtenido con éxito.",
+                response
+        ));
+    }
+
+    @Override
+    @PatchMapping("/{ticketCode}/use")
+    @PreAuthorize("hasRole('STAFF')")
+    public ResponseEntity<StandardResponse<TicketResponse>> useTicket(
+            @PathVariable String ticketCode
+    ) {
+        TicketResponse response = ticketService.useTicket(ticketCode);
+
+        return ResponseEntity.ok(StandardResponse.ok(
+                "Ticket utilizado con éxito.",
                 response
         ));
     }

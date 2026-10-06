@@ -5,6 +5,8 @@ import cl.eventpass.ms_tickets.dto.response.TicketResponse;
 import cl.eventpass.ms_tickets.enums.TicketStatus;
 import cl.eventpass.ms_tickets.event.OrderCompletedEvent;
 import cl.eventpass.ms_tickets.event.OrderCompletedItem;
+import cl.eventpass.ms_tickets.exception.BusinessRuleException;
+import cl.eventpass.ms_tickets.exception.ResourceNotFoundException;
 import cl.eventpass.ms_tickets.mapper.TicketMapper;
 import cl.eventpass.ms_tickets.repository.TicketRepository;
 import cl.eventpass.ms_tickets.service.TicketService;
@@ -12,6 +14,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 
@@ -51,7 +54,7 @@ public class TicketServiceImpl implements TicketService {
                                 .status(TicketStatus.ACTIVE)
                                 .build();
 
-                TicketDocument savedTicket = ticketRepository.save(ticket);
+                ticketRepository.save(ticket);
             }
         }
 
@@ -68,6 +71,35 @@ public class TicketServiceImpl implements TicketService {
         return tickets.stream()
                 .map(ticketMapper::toResponse)
                 .toList();
+    }
+
+    @Override
+    public TicketResponse getTicketByCode(String ticketCode, UUID userId) {
+        TicketDocument ticket = ticketRepository.findByTicketCodeAndDeletedAtIsNull(ticketCode)
+                .orElseThrow(() -> new ResourceNotFoundException("No se encontró un ticket con el código solicitado."));
+
+        if (!ticket.getUserId().equals(userId)) {
+            throw new ResourceNotFoundException("No se encontró un ticket con el código solicitado.");
+        }
+
+        return ticketMapper.toResponse(ticket);
+    }
+
+    @Override
+    public TicketResponse useTicket(String ticketCode) {
+        TicketDocument ticket = ticketRepository.findByTicketCodeAndDeletedAtIsNull(ticketCode)
+                .orElseThrow(() -> new ResourceNotFoundException("No se encontró un ticket con el código solicitado."));
+
+        if (ticket.getStatus() != TicketStatus.ACTIVE) {
+            throw new BusinessRuleException("El ticket no puede utilizarse porque su estado actual es " + ticket.getStatus() + ".");
+        }
+
+        ticket.setStatus(TicketStatus.USED);
+        ticket.setUsedAt(Instant.now());
+
+        TicketDocument updatedTicket = ticketRepository.save(ticket);
+
+        return ticketMapper.toResponse(updatedTicket);
     }
 
     private String generateTicketCode() {

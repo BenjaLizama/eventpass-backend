@@ -102,6 +102,14 @@ public class TicketServiceImpl implements TicketService {
         return ticketMapper.toResponse(updatedTicket);
     }
 
+    @Override
+    public List<TicketResponse> getTicketsByUserId(UUID userId) {
+        List<TicketDocument> tickets = ticketRepository.findByUserIdAndDeletedAtIsNull(userId);
+        return tickets.stream()
+                .map(ticketMapper::toResponse)
+                .toList();
+    }
+
     private String generateTicketCode() {
         return UUID.randomUUID().toString();
     }

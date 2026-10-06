@@ -12,4 +12,5 @@ public interface TicketService {
     List<TicketResponse> getMyTickets(UUID userId);
     TicketResponse getTicketByCode(String ticketCode, UUID userId);
     TicketResponse useTicket(String ticketCode);
+    List<TicketResponse> getTicketsByUserId(UUID userId);
 }

@@ -2,13 +2,15 @@ server:
   port: 8084
 
 spring:
+  mongodb:
+    uri: ${TICKETS_MONGODB_URI:mongodb://localhost:27017/eventpass_tickets}
+    database: ${MONGODB_TICKETS_DATABASE:eventpass_tickets}
+    representation:
+      uuid: standard
+
   data:
     mongodb:
-      uri: ${TICKETS_MONGODB_URI:mongodb://localhost:27017/eventpass_tickets}
-      database: ${MONGODB_TICKETS_DATABASE:eventpass_tickets}
       auto-index-creation: true
-      representation:
-        uuid: standard
 
   cloud:
     aws:

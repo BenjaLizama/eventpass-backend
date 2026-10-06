@@ -8,12 +8,16 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
-public interface TicketRepository extends MongoRepository<TicketDocument, UUID> {
+public interface TicketRepository
+        extends MongoRepository<TicketDocument, UUID>,
+        TicketRepositoryCustom {
+
     Optional<TicketDocument> findByTicketCodeAndDeletedAtIsNull(String ticketCode);
     List<TicketDocument> findByUserIdAndDeletedAtIsNull(UUID userId);
     List<TicketDocument> findByEventIdAndDeletedAtIsNull(UUID eventId);
+
     boolean existsByOrderIdAndOrderItemIdAndDeletedAtIsNull(UUID orderId, UUID orderItemId);
-    boolean existsByOrderIdAndDeletedAtIsNull(UUID orderId);
+
     List<TicketDocument> findByUserIdAndStatusAndDeletedAtIsNull(UUID userId, TicketStatus status);
     Optional<TicketDocument> findByOrderItemIdAndTicketIndexAndDeletedAtIsNull(UUID orderItemId, Integer ticketIndex);
 }

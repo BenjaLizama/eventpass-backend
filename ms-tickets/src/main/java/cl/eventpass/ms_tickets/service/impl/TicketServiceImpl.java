@@ -12,6 +12,7 @@ import cl.eventpass.ms_tickets.repository.TicketRepository;
 import cl.eventpass.ms_tickets.service.TicketService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
@@ -28,8 +29,13 @@ public class TicketServiceImpl implements TicketService {
 
     @Override
     public void generateTickets(OrderCompletedEvent event) {
+
         for (OrderCompletedItem item : event.items()) {
-            for (int ticketIndex = 0; ticketIndex < item.quantity(); ticketIndex++) {
+
+            for (int ticketIndex = 0;
+                 ticketIndex < item.quantity();
+                 ticketIndex++) {
+
                 boolean alreadyExists =
                         ticketRepository
                                 .findByOrderItemIdAndTicketIndexAndDeletedAtIsNull(
@@ -39,6 +45,13 @@ public class TicketServiceImpl implements TicketService {
                                 .isPresent();
 
                 if (alreadyExists) {
+
+                    log.debug(
+                            "Ticket ya existente. orderItemId={}, ticketIndex={}",
+                            item.orderItemId(),
+                            ticketIndex
+                    );
+
                     continue;
                 }
 
@@ -54,7 +67,35 @@ public class TicketServiceImpl implements TicketService {
                                 .status(TicketStatus.ACTIVE)
                                 .build();
 
-                ticketRepository.save(ticket);
+                try {
+
+                    ticketRepository.save(ticket);
+
+                    log.debug(
+                            "Ticket generado correctamente. orderId={}, orderItemId={}, ticketIndex={}",
+                            event.orderId(),
+                            item.orderItemId(),
+                            ticketIndex
+                    );
+
+                } catch (DuplicateKeyException exception) {
+
+                    /*
+                     * Otro consumidor pudo haber creado el mismo ticket
+                     * entre el find() y el save().
+                     *
+                     * El índice único de MongoDB garantiza que solamente
+                     * uno de los documentos sea persistido.
+                     *
+                     * En este caso simplemente ignoramos el duplicado,
+                     * haciendo el procesamiento idempotente.
+                     */
+                    log.debug(
+                            "Ticket duplicado detectado. orderItemId={}, ticketIndex={}",
+                            item.orderItemId(),
+                            ticketIndex
+                    );
+                }
             }
         }
 
@@ -66,7 +107,9 @@ public class TicketServiceImpl implements TicketService {
 
     @Override
     public List<TicketResponse> getMyTickets(UUID userId) {
-        List<TicketDocument> tickets = ticketRepository.findByUserIdAndDeletedAtIsNull(userId);
+
+        List<TicketDocument> tickets =
+                ticketRepository.findByUserIdAndDeletedAtIsNull(userId);
 
         return tickets.stream()
                 .map(ticketMapper::toResponse)
@@ -74,12 +117,25 @@ public class TicketServiceImpl implements TicketService {
     }
 
     @Override
-    public TicketResponse getTicketByCode(String ticketCode, UUID userId) {
-        TicketDocument ticket = ticketRepository.findByTicketCodeAndDeletedAtIsNull(ticketCode)
-                .orElseThrow(() -> new ResourceNotFoundException("No se encontró un ticket con el código solicitado."));
+    public TicketResponse getTicketByCode(
+            String ticketCode,
+            UUID userId
+    ) {
+
+        TicketDocument ticket =
+                ticketRepository
+                        .findByTicketCodeAndDeletedAtIsNull(ticketCode)
+                        .orElseThrow(() ->
+                                new ResourceNotFoundException(
+                                        "No se encontró un ticket con el código solicitado."
+                                )
+                        );
 
         if (!ticket.getUserId().equals(userId)) {
-            throw new ResourceNotFoundException("No se encontró un ticket con el código solicitado.");
+
+            throw new ResourceNotFoundException(
+                    "No se encontró un ticket con el código solicitado."
+            );
         }
 
         return ticketMapper.toResponse(ticket);
@@ -87,28 +143,29 @@ public class TicketServiceImpl implements TicketService {
 
     @Override
     public TicketResponse useTicket(String ticketCode) {
-        TicketDocument ticket = ticketRepository.findByTicketCodeAndDeletedAtIsNull(ticketCode)
-                .orElseThrow(() -> new ResourceNotFoundException("No se encontró un ticket con el código solicitado."));
 
-        if (ticket.getStatus() != TicketStatus.ACTIVE) {
-            throw new BusinessRuleException("El ticket no puede utilizarse porque su estado actual es " + ticket.getStatus() + ".");
+        TicketDocument updatedTicket =
+                ticketRepository.markAsUsed(ticketCode);
+
+        if (updatedTicket != null) {
+            return ticketMapper.toResponse(updatedTicket);
         }
 
-        ticket.setStatus(TicketStatus.USED);
-        ticket.setUsedAt(Instant.now());
+        TicketDocument existingTicket =
+                ticketRepository
+                        .findByTicketCodeAndDeletedAtIsNull(ticketCode)
+                        .orElseThrow(() ->
+                                new ResourceNotFoundException(
+                                        "No se encontró un ticket con el código solicitado."
+                                )
+                        );
 
-        TicketDocument updatedTicket = ticketRepository.save(ticket);
-
-        return ticketMapper.toResponse(updatedTicket);
+        throw new BusinessRuleException(
+                "El ticket no puede utilizarse porque su estado actual es "
+                        + existingTicket.getStatus() + "."
+        );
     }
 
-    @Override
-    public List<TicketResponse> getTicketsByUserId(UUID userId) {
-        List<TicketDocument> tickets = ticketRepository.findByUserIdAndDeletedAtIsNull(userId);
-        return tickets.stream()
-                .map(ticketMapper::toResponse)
-                .toList();
-    }
 
     private String generateTicketCode() {
         return UUID.randomUUID().toString();

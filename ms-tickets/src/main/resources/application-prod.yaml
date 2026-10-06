@@ -16,7 +16,6 @@ spring:
     aws:
       region:
         static: ${AWS_REGION}
-
       credentials:
         access-key: ${AWS_ACCESS_KEY_ID}
         secret-key: ${AWS_SECRET_ACCESS_KEY}

@@ -12,6 +12,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.UUID;
@@ -25,6 +26,7 @@ public class OrderController implements OrderControllerDocs {
 
     @Override
     @PostMapping
+    @PreAuthorize("hasRole('CUSTOMER')")
     public ResponseEntity<StandardResponse<OrderResponse>> createOrder(
             @Valid @RequestBody OrderCreateRequest request,
             @CurrentUserId UUID userId
@@ -48,6 +50,7 @@ public class OrderController implements OrderControllerDocs {
 
     @Override
     @GetMapping("/{id}")
+    @PreAuthorize("hasRole('CUSTOMER')")
     public ResponseEntity<StandardResponse<OrderResponse>> getOrderById(
             @PathVariable UUID id,
             @CurrentUserId UUID userId
@@ -69,6 +72,7 @@ public class OrderController implements OrderControllerDocs {
 
     @Override
     @GetMapping("/my-orders")
+    @PreAuthorize("hasRole('CUSTOMER')")
     public ResponseEntity<StandardResponse<Page<OrderResponse>>> getMyOrders(
             Pageable pageable,
             @CurrentUserId UUID userId
@@ -90,6 +94,7 @@ public class OrderController implements OrderControllerDocs {
 
     @Override
     @PatchMapping("/{id}/cancel")
+    @PreAuthorize("hasRole('CUSTOMER')")
     public ResponseEntity<StandardResponse<OrderResponse>> cancelOrder(
             @PathVariable UUID id,
             @CurrentUserId UUID userId

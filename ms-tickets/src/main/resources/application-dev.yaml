@@ -1,0 +1,28 @@
+server:
+  port: 8084
+
+spring:
+  mongodb:
+    uri: ${TICKETS_MONGODB_URI:mongodb://localhost:27017/eventpass_tickets}
+    database: ${MONGODB_TICKETS_DATABASE:eventpass_tickets}
+    representation:
+      uuid: standard
+
+  data:
+    mongodb:
+      auto-index-creation: true
+
+  cloud:
+    aws:
+      region:
+        static: ${AWS_REGION:us-east-1}
+      credentials:
+        access-key: ${AWS_ACCESS_KEY_ID:test}
+        secret-key: ${AWS_SECRET_ACCESS_KEY:test}
+      sqs:
+        endpoint: ${AWS_SQS_ENDPOINT:http://localhost:4566}
+
+app:
+  sqs:
+    queues:
+      order-completed: ${ORDER_COMPLETED_QUEUE:eventpass-orders-completed-queue}

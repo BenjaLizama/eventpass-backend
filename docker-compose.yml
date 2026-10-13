@@ -201,7 +201,7 @@ services:
       - eventpass
 
 
-    # ================================================
+  # ================================================
   # MS-AUTH
   # ================================================
   ms-auth:
@@ -226,10 +226,6 @@ services:
       AWS_REGION: ${AWS_REGION}
       AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
       AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
-
-      # Credenciales que Auth espera recibir desde Orders
-      MS_ORDERS_CLIENT_ID: ${MS_ORDERS_CLIENT_ID:?Falta MS_ORDERS_CLIENT_ID en .env}
-      MS_ORDERS_CLIENT_SECRET: ${MS_ORDERS_CLIENT_SECRET:?Falta MS_ORDERS_CLIENT_SECRET en .env}
 
     ports:
       - "8081:8081"

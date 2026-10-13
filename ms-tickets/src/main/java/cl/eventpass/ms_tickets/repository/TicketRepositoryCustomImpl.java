@@ -7,9 +7,7 @@ import org.springframework.data.mongodb.core.MongoTemplate;
 import org.springframework.data.mongodb.core.query.Criteria;
 import org.springframework.data.mongodb.core.query.Query;
 import org.springframework.data.mongodb.core.query.Update;
-import org.springframework.data.mongodb.core.FindAndModifyOptions;
 import org.springframework.stereotype.Repository;
-
 
 import java.time.Instant;
 
@@ -42,7 +40,6 @@ public class TicketRepositoryCustomImpl
         return mongoTemplate.findAndModify(
                 query,
                 update,
-                FindAndModifyOptions.options().returnNew(true),
                 TicketDocument.class
         );
     }

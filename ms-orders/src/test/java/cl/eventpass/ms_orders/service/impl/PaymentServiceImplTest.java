@@ -161,7 +161,7 @@ class PaymentServiceImplTest {
                 anyList()
         )).thenReturn(expectedResponse);
 
-        OrderResponse result = payment_service.processPayment(
+        OrderResponse result = paymentService.processPayment(
                 orderId,
                 userId,
                 paymentRequest
@@ -180,7 +180,7 @@ class PaymentServiceImplTest {
         verify(orderRepository).findByIdAndUserId(orderId, userId);
         verify(paymentProvider).processPayment(
                 pendingOrder,
-                payment_request
+                paymentRequest
         );
         verify(orderCapacityService).releaseCapacity(pendingOrder);
         verify(orderRepository).save(pendingOrder);

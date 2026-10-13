@@ -1,0 +1,89 @@
+name: E2E Tests
+
+on:
+  push:
+    branches:
+      - develop
+      - main
+  pull_request:
+    branches:
+      - develop
+
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+
+      - name: Create environment file
+        run: |
+          cat > .env <<EOF
+          SPRING_PROFILES_ACTIVE=dev
+          JWT_SECRET=${{ secrets.JWT_SECRET }}
+          AWS_REGION=us-east-1
+          AWS_ACCESS_KEY_ID=test
+          AWS_SECRET_ACCESS_KEY=test
+          POSTGRES_AUTH_DB=eventpassauth
+          POSTGRES_AUTH_USER=postgres
+          POSTGRES_AUTH_PASSWORD=password
+          POSTGRES_AUTH_PORT=5432
+          POSTGRES_EVENTS_DB=eventpassevents
+          POSTGRES_EVENTS_USER=postgres
+          POSTGRES_EVENTS_PASSWORD=password
+          POSTGRES_EVENTS_PORT=5433
+          POSTGRES_ORDERS_DB=eventpassorders
+          POSTGRES_ORDERS_USER=postgres
+          POSTGRES_ORDERS_PASSWORD=password
+          POSTGRES_ORDERS_PORT=5434
+          REDIS_PORT=6379
+          LOCALSTACK_PORT=4566
+          MONGODB_TICKETS_PORT=27018
+          MONGODB_TICKETS_DATABASE=eventpasstickets
+          MS_ORDERS_CLIENT_ID=ms-orders
+          MS_ORDERS_CLIENT_SECRET=ms-orders-secret
+          E2E_ADMIN_EMAIL=admin@eventpass.cl
+          E2E_ADMIN_PASSWORD=Cambiame123!
+          EOF
+
+      - name: Start platform
+        run: docker compose --env-file .env up -d --build
+
+      - name: Wait for services
+        run: |
+          for i in {1..60}; do
+            if docker compose ps | grep -q "ms-tickets.*healthy" &&
+               docker compose ps | grep -q "ms-orders.*healthy" &&
+               docker compose ps | grep -q "ms-events.*healthy" &&
+               docker compose ps | grep -q "ms-auth.*healthy"; then
+              echo "All services are healthy"
+              exit 0
+            fi
+            sleep 5
+          done
+          docker compose ps
+          docker compose logs --tail=200
+          exit 1
+
+      - name: Run E2E tests
+        env:
+          E2E_ADMIN_EMAIL: admin@eventpass.cl
+          E2E_ADMIN_PASSWORD: Cambiame123!
+        run: >
+          ./ms-auth/mvnw -f e2e-tests/pom.xml
+          "-Dit.test=EventPassPurchaseFlowIT,OrderCancellationRestoresCapacityIT,OrderPerUserLimitIT,OrderInsufficientCapacityIT,TicketAccessControlIT"
+          verify
+
+      - name: Show logs on failure
+        if: failure()
+        run: |
+          docker compose ps
+          docker compose logs --tail=300

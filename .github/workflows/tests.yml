@@ -119,7 +119,7 @@ jobs:
         working-directory: ms-tickets
         run: ./mvnw clean test
 
-    e2e-tests:
+  e2e-tests:
     name: Platform E2E Tests
     needs: changes
     if: needs.changes.outputs.e2e == 'true'
@@ -149,22 +149,22 @@ jobs:
           AWS_REGION=us-east-1
           AWS_ACCESS_KEY_ID=test
           AWS_SECRET_ACCESS_KEY=test
-          REDIS_PORT=6379
-          LOCALSTACK_PORT=4566
-          POSTGRES_AUTH_DB=eventpass_auth
+          POSTGRES_AUTH_DB=eventpassauth
           POSTGRES_AUTH_USER=postgres
           POSTGRES_AUTH_PASSWORD=password
           POSTGRES_AUTH_PORT=5432
-          POSTGRES_EVENTS_DB=eventpass_events
+          POSTGRES_EVENTS_DB=eventpassevents
           POSTGRES_EVENTS_USER=postgres
           POSTGRES_EVENTS_PASSWORD=password
           POSTGRES_EVENTS_PORT=5433
-          POSTGRES_ORDERS_DB=eventpass_orders
+          POSTGRES_ORDERS_DB=eventpassorders
           POSTGRES_ORDERS_USER=postgres
           POSTGRES_ORDERS_PASSWORD=password
           POSTGRES_ORDERS_PORT=5434
+          REDIS_PORT=6379
+          LOCALSTACK_PORT=4566
           MONGODB_TICKETS_PORT=27018
-          MONGODB_TICKETS_DATABASE=eventpass_tickets
+          MONGODB_TICKETS_DATABASE=eventpasstickets
           MS_ORDERS_CLIENT_ID=${{ secrets.MS_ORDERS_CLIENT_ID }}
           MS_ORDERS_CLIENT_SECRET=${{ secrets.MS_ORDERS_CLIENT_SECRET }}
           E2E_ADMIN_EMAIL=admin@eventpass.cl

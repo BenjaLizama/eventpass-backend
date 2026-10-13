@@ -22,6 +22,7 @@ jobs:
     outputs:
       ms-auth: ${{ steps.filter.outputs.ms-auth }}
       ms-orders: ${{ steps.filter.outputs.ms-orders }}
+      ms-events: ${{ steps.filter.outputs.ms-events }}
       ms-tickets: ${{ steps.filter.outputs.ms-tickets }}
       e2e: ${{ steps.filter.outputs.e2e }}
 
@@ -39,6 +40,9 @@ jobs:
               - '.github/workflows/tests.yml'
             ms-orders:
               - 'ms-orders/**'
+              - '.github/workflows/tests.yml'
+            ms-events:
+              - 'ms-events/**'
               - '.github/workflows/tests.yml'
             ms-tickets:
               - 'ms-tickets/**'
@@ -97,6 +101,28 @@ jobs:
         working-directory: ms-orders
         run: ./mvnw clean test
 
+  ms-events-tests:
+    name: ms-events Tests
+    needs: changes
+    if: needs.changes.outputs.ms-events == 'true'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+          cache-dependency-path: ms-events/pom.xml
+
+      - name: Run ms-events tests
+        working-directory: ms-events
+        run: ./mvnw clean test
+
   ms-tickets-tests:
     name: ms-tickets Tests
     needs: changes
@@ -119,7 +145,7 @@ jobs:
         working-directory: ms-tickets
         run: ./mvnw clean test
 
-    e2e-tests:
+  e2e-tests:
     name: Platform E2E Tests
     needs: changes
     if: needs.changes.outputs.e2e == 'true'

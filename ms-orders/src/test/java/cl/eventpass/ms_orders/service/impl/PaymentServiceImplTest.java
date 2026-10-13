@@ -13,12 +13,14 @@ import cl.eventpass.ms_orders.payment.PaymentResult;
 import cl.eventpass.ms_orders.repository.OrderItemRepository;
 import cl.eventpass.ms_orders.repository.OrderRepository;
 import cl.eventpass.ms_orders.service.OrderCapacityService;
+import cl.eventpass.ms_orders.event.OrderCompletedApplicationEvent;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.ApplicationEventPublisher;
 
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
@@ -52,6 +54,9 @@ class PaymentServiceImplTest {
 
     @Mock
     private OrderMapper orderMapper;
+
+    @Mock
+    private ApplicationEventPublisher applicationEventPublisher;
 
     @InjectMocks
     private PaymentServiceImpl paymentService;
@@ -124,6 +129,8 @@ class PaymentServiceImplTest {
                 paymentRequest
         );
         verify(orderRepository).save(pendingOrder);
+        verify(applicationEventPublisher).publishEvent(
+                any(OrderCompletedApplicationEvent.class));
 
         verify(orderCapacityService, never())
                 .releaseCapacity(any(OrderEntity.class));

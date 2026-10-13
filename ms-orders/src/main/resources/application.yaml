@@ -1,14 +1,14 @@
+server:
+  port: ${PORT:8083}
+
 spring:
   application:
     name: ms-orders
-
   profiles:
     active: ${SPRING_PROFILES_ACTIVE:dev}
-
   threads:
     virtual:
       enabled: true
-
   jpa:
     open-in-view: false
 
@@ -23,14 +23,16 @@ app:
       base-url: ${AUTH_SERVICE_URL:http://localhost:8081}
       client-id: ${MS_ORDERS_CLIENT_ID:eventpass-ms-orders}
       client-secret: ${MS_ORDERS_CLIENT_SECRET:cambiame-ms-orders-secret}
-
     events:
       base-url: ${EVENTS_SERVICE_URL:http://localhost:8082}
+  sqs:
+    queues:
+      order-created: ${ORDER_CREATED_QUEUE:eventpass-orders-created-queue}
+      order-completed: ${ORDER_COMPLETED_QUEUE:eventpass-orders-completed-queue}
 
 springdoc:
   api-docs:
     path: /v3/api-docs
-
   swagger-ui:
     path: /swagger-ui.html
     tags-sorter: alpha
@@ -41,7 +43,6 @@ management:
     web:
       exposure:
         include: health,info
-
   endpoint:
     health:
       show-details: always

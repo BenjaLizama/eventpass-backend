@@ -5,6 +5,9 @@ import cl.eventpass.ms_orders.dto.response.OrderResponse;
 import cl.eventpass.ms_orders.entity.OrderEntity;
 import cl.eventpass.ms_orders.enums.OrderStatus;
 import cl.eventpass.ms_orders.enums.PaymentStatus;
+import cl.eventpass.ms_orders.event.OrderCompletedApplicationEvent;
+import cl.eventpass.ms_orders.event.OrderCompletedEvent;
+import cl.eventpass.ms_orders.event.OrderCompletedItem;
 import cl.eventpass.ms_orders.exception.BusinessRuleException;
 import cl.eventpass.ms_orders.exception.ResourceNotFoundException;
 import cl.eventpass.ms_orders.mapper.OrderMapper;
@@ -15,6 +18,7 @@ import cl.eventpass.ms_orders.repository.OrderRepository;
 import cl.eventpass.ms_orders.service.OrderCapacityService;
 import cl.eventpass.ms_orders.service.PaymentService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -30,6 +34,7 @@ public class PaymentServiceImpl implements PaymentService {
     private final OrderCapacityService orderCapacityService;
     private final PaymentProvider paymentProvider;
     private final OrderMapper orderMapper;
+    private final ApplicationEventPublisher applicationEventPublisher;
 
     @Override
     @Transactional
@@ -74,9 +79,37 @@ public class PaymentServiceImpl implements PaymentService {
         OrderEntity savedOrder =
                 orderRepository.save(order);
 
+        var orderItems =
+                orderItemRepository.findAllByOrderId(
+                        savedOrder.getId()
+                );
+
+        if (savedOrder.getStatus() == OrderStatus.PAID) {
+
+            OrderCompletedEvent event =
+                    new OrderCompletedEvent(
+                            savedOrder.getId(),
+                            savedOrder.getUserId(),
+                            orderItems.stream()
+                                    .map(item ->
+                                            new OrderCompletedItem(
+                                                    item.getId(),
+                                                    item.getEventId(),
+                                                    item.getTicketCategoryId(),
+                                                    item.getQuantity()
+                                            )
+                                    )
+                                    .toList()
+                    );
+
+            applicationEventPublisher.publishEvent(
+                    new OrderCompletedApplicationEvent(event)
+            );
+        }
+
         return orderMapper.toResponse(
                 savedOrder,
-                orderItemRepository.findAllByOrderId(savedOrder.getId())
+                orderItems
         );
     }
 

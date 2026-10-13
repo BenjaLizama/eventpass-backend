@@ -9,10 +9,11 @@ on:
     branches:
       - develop
       - main
+
 permissions:
   contents: read
   pull-requests: read
-  
+
 jobs:
   changes:
     name: Detect changed services
@@ -21,6 +22,8 @@ jobs:
     outputs:
       ms-auth: ${{ steps.filter.outputs.ms-auth }}
       ms-orders: ${{ steps.filter.outputs.ms-orders }}
+      ms-tickets: ${{ steps.filter.outputs.ms-tickets }}
+      e2e: ${{ steps.filter.outputs.e2e }}
 
     steps:
       - name: Checkout repository
@@ -36,6 +39,18 @@ jobs:
               - '.github/workflows/tests.yml'
             ms-orders:
               - 'ms-orders/**'
+              - '.github/workflows/tests.yml'
+            ms-tickets:
+              - 'ms-tickets/**'
+              - '.github/workflows/tests.yml'
+            e2e:
+              - 'ms-auth/**'
+              - 'ms-events/**'
+              - 'ms-orders/**'
+              - 'ms-tickets/**'
+              - 'e2e-tests/**'
+              - 'docker-compose.yml'
+              - 'scripts/**'
               - '.github/workflows/tests.yml'
 
   ms-auth-tests:
@@ -81,3 +96,110 @@ jobs:
       - name: Run ms-orders tests
         working-directory: ms-orders
         run: ./mvnw clean test
+
+  ms-tickets-tests:
+    name: ms-tickets Tests
+    needs: changes
+    if: needs.changes.outputs.ms-tickets == 'true'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+          cache-dependency-path: ms-tickets/pom.xml
+
+      - name: Run ms-tickets tests
+        working-directory: ms-tickets
+        run: ./mvnw clean test
+
+    e2e-tests:
+    name: Platform E2E Tests
+    needs: changes
+    if: needs.changes.outputs.e2e == 'true'
+    runs-on: ubuntu-latest
+
+    env:
+      E2E_ADMIN_EMAIL: admin@eventpass.cl
+      E2E_ADMIN_PASSWORD: Cambiame123!
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+          cache-dependency-path: e2e-tests/pom.xml
+
+      - name: Create environment file
+        run: |
+          cat > .env <<EOF
+          SPRING_PROFILES_ACTIVE=dev
+          JWT_SECRET=${{ secrets.JWT_SECRET }}
+          AWS_REGION=us-east-1
+          AWS_ACCESS_KEY_ID=test
+          AWS_SECRET_ACCESS_KEY=test
+          REDIS_PORT=6379
+          LOCALSTACK_PORT=4566
+          POSTGRES_AUTH_DB=eventpass_auth
+          POSTGRES_AUTH_USER=postgres
+          POSTGRES_AUTH_PASSWORD=password
+          POSTGRES_AUTH_PORT=5432
+          POSTGRES_EVENTS_DB=eventpass_events
+          POSTGRES_EVENTS_USER=postgres
+          POSTGRES_EVENTS_PASSWORD=password
+          POSTGRES_EVENTS_PORT=5433
+          POSTGRES_ORDERS_DB=eventpass_orders
+          POSTGRES_ORDERS_USER=postgres
+          POSTGRES_ORDERS_PASSWORD=password
+          POSTGRES_ORDERS_PORT=5434
+          MONGODB_TICKETS_PORT=27018
+          MONGODB_TICKETS_DATABASE=eventpass_tickets
+          MS_ORDERS_CLIENT_ID=${{ secrets.MS_ORDERS_CLIENT_ID }}
+          MS_ORDERS_CLIENT_SECRET=${{ secrets.MS_ORDERS_CLIENT_SECRET }}
+          E2E_ADMIN_EMAIL=admin@eventpass.cl
+          E2E_ADMIN_PASSWORD=Cambiame123!
+          EOF
+
+      - name: Start platform
+        run: docker compose --env-file .env up -d --build
+
+      - name: Wait for services
+        run: |
+          for i in {1..60}; do
+            if docker compose ps | grep -q "ms-auth.*healthy" &&
+               docker compose ps | grep -q "ms-events.*healthy" &&
+               docker compose ps | grep -q "ms-orders.*healthy" &&
+               docker compose ps | grep -q "ms-tickets.*healthy"; then
+              echo "All services are healthy"
+              exit 0
+            fi
+
+            sleep 5
+          done
+
+          docker compose ps
+          docker compose logs --tail=200
+          exit 1
+
+      - name: Run E2E tests
+        run: >
+          ./ms-auth/mvnw -f e2e-tests/pom.xml
+          "-Dit.test=EventPassPurchaseFlowIT,OrderCancellationRestoresCapacityIT,OrderPerUserLimitIT,OrderInsufficientCapacityIT,TicketAccessControlIT"
+          verify
+
+      - name: Show logs on failure
+        if: failure()
+        run: |
+          docker compose ps
+          docker compose logs --tail=300

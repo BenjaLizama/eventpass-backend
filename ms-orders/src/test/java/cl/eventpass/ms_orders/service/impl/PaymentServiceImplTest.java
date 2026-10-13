@@ -19,6 +19,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.ApplicationEventPublisher;
 
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
@@ -52,6 +53,9 @@ class PaymentServiceImplTest {
 
     @Mock
     private OrderMapper orderMapper;
+
+    @Mock
+    private ApplicationEventPublisher applicationEventPublisher;
 
     @InjectMocks
     private PaymentServiceImpl paymentService;
@@ -157,7 +161,7 @@ class PaymentServiceImplTest {
                 anyList()
         )).thenReturn(expectedResponse);
 
-        OrderResponse result = paymentService.processPayment(
+        OrderResponse result = payment_service.processPayment(
                 orderId,
                 userId,
                 paymentRequest
@@ -176,7 +180,7 @@ class PaymentServiceImplTest {
         verify(orderRepository).findByIdAndUserId(orderId, userId);
         verify(paymentProvider).processPayment(
                 pendingOrder,
-                paymentRequest
+                payment_request
         );
         verify(orderCapacityService).releaseCapacity(pendingOrder);
         verify(orderRepository).save(pendingOrder);

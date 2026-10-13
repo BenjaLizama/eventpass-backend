@@ -19,7 +19,6 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.context.ApplicationEventPublisher;
 
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
@@ -53,9 +52,6 @@ class PaymentServiceImplTest {
 
     @Mock
     private OrderMapper orderMapper;
-
-    @Mock
-    private ApplicationEventPublisher applicationEventPublisher;
 
     @InjectMocks
     private PaymentServiceImpl paymentService;
@@ -209,4 +205,103 @@ class PaymentServiceImplTest {
         );
     }
 
+    @Test
+    void processPayment_WhenOrderIsNotPending_ThrowsBusinessRuleException() {
+        pendingOrder.setStatus(OrderStatus.PAID);
+
+        when(orderRepository.findByIdAndUserId(orderId, userId))
+                .thenReturn(Optional.of(pendingOrder));
+
+        assertThrows(
+                BusinessRuleException.class,
+                () -> paymentService.processPayment(
+                        orderId,
+                        userId,
+                        paymentRequest
+                )
+        );
+
+        verify(paymentProvider, never())
+                .processPayment(any(), any());
+        verify(orderCapacityService, never())
+                .releaseCapacity(any(OrderEntity.class));
+    }
+
+    @Test
+    void processPayment_WhenOrderPaymentWasAlreadyRejected_ThrowsBusinessRuleException() {
+        pendingOrder.setStatus(OrderStatus.CANCELLED);
+        pendingOrder.setPaymentStatus(PaymentStatus.REJECTED);
+
+        when(orderRepository.findByIdAndUserId(orderId, userId))
+                .thenReturn(Optional.of(pendingOrder));
+
+        assertThrows(
+                BusinessRuleException.class,
+                () -> paymentService.processPayment(
+                        orderId,
+                        userId,
+                        paymentRequest
+                )
+        );
+
+        verify(paymentProvider, never())
+                .processPayment(any(), any());
+        verify(orderCapacityService, never())
+                .releaseCapacity(any(OrderEntity.class));
+    }
+
+    @Test
+    void processPayment_WhenOrderIsExpired_ThrowsBusinessRuleException() {
+        pendingOrder.setExpiresAt(
+                Instant.now().minus(5, ChronoUnit.MINUTES)
+        );
+
+        when(orderRepository.findByIdAndUserId(orderId, userId))
+                .thenReturn(Optional.of(pendingOrder));
+
+        assertThrows(
+                BusinessRuleException.class,
+                () -> paymentService.processPayment(
+                        orderId,
+                        userId,
+                        paymentRequest
+                )
+        );
+
+        verify(paymentProvider, never())
+                .processPayment(any(), any());
+        verify(orderCapacityService, never())
+                .releaseCapacity(any(OrderEntity.class));
+    }
+
+    @Test
+    void processPayment_WhenProviderThrowsException_DoesNotChangeOrderStatus() {
+        when(orderRepository.findByIdAndUserId(orderId, userId))
+                .thenReturn(Optional.of(pendingOrder));
+
+        when(paymentProvider.processPayment(
+                pendingOrder,
+                paymentRequest
+        )).thenThrow(new RuntimeException("Payment provider unavailable"));
+
+        assertThrows(
+                RuntimeException.class,
+                () -> paymentService.processPayment(
+                        orderId,
+                        userId,
+                        paymentRequest
+                )
+        );
+
+        assertEquals(OrderStatus.PENDING, pendingOrder.getStatus());
+        assertEquals(
+                PaymentStatus.PENDING,
+                pendingOrder.getPaymentStatus()
+        );
+
+        verify(orderRepository, never())
+                .save(any(OrderEntity.class));
+        verify(orderCapacityService, never())
+                .releaseCapacity(any(OrderEntity.class));
+    }
 }

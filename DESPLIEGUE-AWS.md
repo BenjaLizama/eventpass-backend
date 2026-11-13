@@ -41,3 +41,5 @@ Si el aforo está lleno al procesar la orden, se registra como rechazada por fal
 En el perfil de desarrollo, Órdenes crea `order_completed_outbox` al arrancar. Para el perfil de producción, aplicar [el SQL de la outbox](ms-orders/src/main/resources/db/order-completed-outbox.sql) y [el SQL de reservas de Eventos](ms-events/docs/sql/001-capacity-reservations.sql) al preparar PostgreSQL. El publicador puede volver a enviar un evento si el proceso se interrumpe después de que SQS lo recibe. Tickets usa el identificador del ítem y el índice del ticket para evitar una segunda emisión.
 
 El [arranque del Gateway local](infra/gateway/README.md) documenta cómo levantar Floci en paralelo con LocalStack y ejecutar la suite funcional desde una sola URL.
+
+La [prueba aislada SQS → Lambda](infra/lambda-smoke/README.md) verificó que Floci vuelve a invocar la función con el mismo mensaje tras un fallo. El procesador de órdenes de EventPass se conectará a las reservas internas en la siguiente etapa.

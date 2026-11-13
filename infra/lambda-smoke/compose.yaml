@@ -1,0 +1,10 @@
+services:
+  floci:
+    image: floci/floci:2.4.0
+    ports:
+      - "127.0.0.1:4568:4566"
+    environment:
+      FLOCI_HOSTNAME: floci
+      FLOCI_SERVICES_LAMBDA_EPHEMERAL: "true"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock

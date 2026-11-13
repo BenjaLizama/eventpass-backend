@@ -14,9 +14,11 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.core.ParameterizedTypeReference;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.web.client.RestClient;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
@@ -36,7 +38,8 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
         webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
         properties = {
                 "app.payment.mock.result=REJECTED",
-                "app.orders.expiration.enabled=false"
+                "app.orders.expiration.enabled=false",
+                "app.orders.outbox.enabled=false"
         }
 )
 @Testcontainers
@@ -285,7 +288,11 @@ class OrderPaymentRejectedE2ETest {
         );
     }
 
+    @MockitoBean
+    private StringRedisTemplate redis;
+
     private String generateUserJwt(UUID userId) {
+        org.mockito.Mockito.when(redis.hasKey("jwt:session:" + userId)).thenReturn(true);
         SecretKey key = Keys.hmacShaKeyFor(
                 Decoders.BASE64.decode(JWT_SECRET)
         );
@@ -298,6 +305,7 @@ class OrderPaymentRejectedE2ETest {
                 .claim("authorities", List.of("ROLE_CUSTOMER"))
                 .issuedAt(java.util.Date.from(now))
                 .expiration(java.util.Date.from(now.plusSeconds(3600)))
+                .claim("sid", userId.toString())
                 .signWith(key)
                 .compact();
     }

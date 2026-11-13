@@ -10,6 +10,7 @@ import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -24,6 +25,12 @@ import java.util.List;
 
 @Component
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
+
+    private final StringRedisTemplate redis;
+
+    public JwtAuthenticationFilter(StringRedisTemplate redis) {
+        this.redis = redis;
+    }
 
     @Value("${application.security.jwt.secret-key}")
     private String secretKey;
@@ -53,6 +60,11 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 throw new IllegalArgumentException(
                         "El JWT no contiene un userId válido."
                 );
+            }
+
+            if (!hasActiveUserSession(claims)) {
+                response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+                return;
             }
 
             if (SecurityContextHolder.getContext().getAuthentication() == null) {
@@ -85,6 +97,12 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         }
 
         filterChain.doFilter(request, response);
+    }
+
+    private boolean hasActiveUserSession(Claims claims) {
+        String sessionId = claims.get("sid", String.class);
+        return sessionId != null && !sessionId.isBlank()
+                && Boolean.TRUE.equals(redis.hasKey("jwt:session:" + sessionId));
     }
 
     private Claims extractAllClaims(String token) {

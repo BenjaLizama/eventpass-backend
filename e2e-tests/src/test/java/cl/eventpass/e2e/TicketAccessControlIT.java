@@ -45,6 +45,43 @@ class TicketAccessControlIT {
     );
 
     @Test
+    @DisplayName("Cerrar sesión revoca el acceso a los cuatro microservicios")
+    void shouldRejectRevokedSessionAcrossServices() throws Exception {
+        String token = login(
+                requiredEnv("E2E_ADMIN_EMAIL"),
+                requiredEnv("E2E_ADMIN_PASSWORD")
+        );
+        Map<String, String> administrativeRoutes = Map.of(
+                "/api/v1/auth/me", auth,
+                "/api/v1/events/my-events", events
+        );
+        String email = "logout-" + UUID.randomUUID() + "@example.com";
+        String password = "Password123!";
+        assertEquals(201, request("POST", auth, "/api/v1/auth/register", null,
+                Map.of("email", email, "password", password)).statusCode());
+        assertSessionRevocation(token, administrativeRoutes);
+        assertSessionRevocation(login(email, password), Map.of(
+                "/api/v1/orders/my-orders", orders,
+                "/api/v1/tickets/me", tickets
+        ));
+    }
+
+    private void assertSessionRevocation(String token, Map<String, String> protectedRoutes) throws Exception {
+        for (var route : protectedRoutes.entrySet()) {
+            assertEquals(200, request("GET", route.getValue(), route.getKey(), token, null).statusCode(),
+                    route.getKey());
+        }
+
+        assertEquals(200, request("POST", auth, "/api/v1/auth/logout", token, null).statusCode());
+
+        for (var route : protectedRoutes.entrySet()) {
+            int status = request("GET", route.getValue(), route.getKey(), token, null).statusCode();
+            assertTrue(status == 401 || status == 403,
+                    () -> route.getKey() + " devolvió HTTP " + status + " tras cerrar sesión.");
+        }
+    }
+
+    @Test
     @DisplayName("Control de acceso a tickets: Auth → Events → Orders → SQS → Tickets")
     void shouldProtectTicketAccessAndUsage() throws Exception {
 

@@ -3,10 +3,12 @@ package cl.eventpass.ms_events.repository;
 import cl.eventpass.ms_events.entity.EventEntity;
 import cl.eventpass.ms_events.enums.EventCategory;
 import cl.eventpass.ms_events.enums.EventStatus;
+import jakarta.persistence.LockModeType;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
@@ -17,6 +19,10 @@ import java.util.UUID;
 
 @Repository
 public interface EventRepository extends JpaRepository<EventEntity, UUID> {
+
+    @Lock(LockModeType.PESSIMISTIC_READ)
+    @Query("SELECT e FROM EventEntity e WHERE e.id = :id AND e.deletedAt IS NULL")
+    Optional<EventEntity> findActiveForReservation(@Param("id") UUID id);
 
     @Query("""
         SELECT e

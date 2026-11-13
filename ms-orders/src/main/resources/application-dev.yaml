@@ -2,6 +2,10 @@ server:
   port: 8083
 
 spring:
+  sql:
+    init:
+      mode: always
+      schema-locations: classpath:db/order-completed-outbox.sql
   datasource:
     url: ${ORDERS_DB_URL:jdbc:postgresql://localhost:5434/eventpass_orders}
     username: ${ORDERS_DB_USERNAME:postgres}

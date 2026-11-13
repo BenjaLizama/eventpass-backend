@@ -1,0 +1,12 @@
+services:
+  floci-gateway:
+    image: floci/floci:2.4.0
+    ports:
+      - "127.0.0.1:4567:4566"
+    networks:
+      - eventpass
+
+networks:
+  eventpass:
+    name: eventpass_network
+    external: true

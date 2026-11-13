@@ -219,9 +219,12 @@ jobs:
           exit 1
 
       - name: Run E2E tests
+        env:
+          MS_ORDERS_CLIENT_ID: ${{ secrets.MS_ORDERS_CLIENT_ID }}
+          MS_ORDERS_CLIENT_SECRET: ${{ secrets.MS_ORDERS_CLIENT_SECRET }}
         run: >
           ./ms-auth/mvnw -f e2e-tests/pom.xml
-          "-Dit.test=EventPassPurchaseFlowIT,OrderCancellationRestoresCapacityIT,OrderPerUserLimitIT,OrderInsufficientCapacityIT,TicketAccessControlIT"
+          "-Dit.test=PlatformHealthIT,EventPassPurchaseFlowIT,OrderCancellationRestoresCapacityIT,OrderPerUserLimitIT,OrderInsufficientCapacityIT,TicketAccessControlIT,OrderItemCapacityIT"
           verify
 
       - name: Show logs on failure

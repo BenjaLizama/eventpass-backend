@@ -2,6 +2,9 @@ package cl.eventpass.ms_orders.service.e2e;
 
 import cl.eventpass.ms_orders.dto.response.OrderResponse;
 import cl.eventpass.ms_orders.dto.response.StandardResponse;
+import cl.eventpass.ms_orders.event.OrderCompletedEvent;
+import cl.eventpass.ms_orders.event.OrderCompletedOutboxPublisher;
+import io.awspring.cloud.sqs.operations.SqsTemplate;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.io.Decoders;
 import io.jsonwebtoken.security.Keys;
@@ -13,11 +16,15 @@ import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.core.ParameterizedTypeReference;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.http.MediaType;
+import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.web.client.RestClient;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
@@ -35,11 +42,14 @@ import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.when;
 
 @SpringBootTest(
         webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
         properties = {
-                "app.orders.expiration.enabled=false"
+                "app.orders.expiration.enabled=false",
+                "app.orders.outbox.poll-delay-ms=3600000"
         }
 )
 @Testcontainers
@@ -50,6 +60,15 @@ class OrderFlowE2ETest {
 
     @LocalServerPort
     private int port;
+
+    @Autowired
+    private JdbcClient jdbc;
+
+    @Autowired
+    private OrderCompletedOutboxPublisher publisher;
+
+    @MockitoBean
+    private SqsTemplate sqs;
 
     @Container
     @ServiceConnection
@@ -302,7 +321,11 @@ class OrderFlowE2ETest {
         );
     }
 
+    @MockitoBean
+    private StringRedisTemplate redis;
+
     private String generateUserJwt(UUID userId) {
+        org.mockito.Mockito.when(redis.hasKey("jwt:session:" + userId)).thenReturn(true);
         SecretKey key = Keys.hmacShaKeyFor(
                 Decoders.BASE64.decode(JWT_SECRET)
         );
@@ -325,6 +348,7 @@ class OrderFlowE2ETest {
                                 now.plusSeconds(3600)
                         )
                 )
+                .claim("sid", userId.toString())
                 .signWith(key)
                 .compact();
     }
@@ -662,6 +686,23 @@ class OrderFlowE2ETest {
         assertEquals("PAID", paidOrder.status().name());
         assertEquals("APPROVED", paidOrder.paymentStatus().name());
         assertEquals(userId, paidOrder.userId());
+
+        when(sqs.<OrderCompletedEvent>send(any()))
+                .thenThrow(new IllegalStateException("SQS no disponible"))
+                .thenReturn(null);
+        assertEquals(1, pendingMessages(orderId));
+        publisher.publishPending();
+        assertEquals(1, pendingMessages(orderId));
+
+        jdbc.sql("UPDATE order_completed_outbox SET next_attempt_at = CURRENT_TIMESTAMP WHERE order_id = :id")
+                .param("id", orderId).update();
+        publisher.publishPending();
+        assertEquals(0, pendingMessages(orderId));
+    }
+
+    private int pendingMessages(UUID orderId) {
+        return jdbc.sql("SELECT COUNT(*) FROM order_completed_outbox WHERE order_id = :id")
+                .param("id", orderId).query(Integer.class).single();
     }
 
     /*RECORD */

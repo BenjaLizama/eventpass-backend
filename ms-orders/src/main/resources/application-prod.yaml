@@ -28,7 +28,7 @@ app:
     events:
       base-url: ${EVENTS_SERVICE_URL}
 
-  sqs:
-    queues:
-      order-created: ${ORDER_CREATED_QUEUE:eventpass-orders-created-queue}
-      order-completed: ${ORDER_COMPLETED_QUEUE:eventpass-orders-completed-queue}
+sqs:
+  queues:
+    order-created: ${ORDER_CREATED_QUEUE:eventpass-orders-created-queue}
+    order-completed: ${ORDER_COMPLETED_QUEUE:eventpass-orders-completed-queue}

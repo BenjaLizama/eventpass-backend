@@ -1,0 +1,37 @@
+{
+  "ms-auth:8081": [
+    "POST /api/v1/auth/register",
+    "POST /api/v1/auth/login",
+    "POST /api/v1/auth/refresh",
+    "POST /api/v1/auth/logout",
+    "GET /api/v1/auth/me",
+    "PATCH /api/v1/auth/me",
+    "POST /api/v1/admin/users/staff",
+    "POST /api/v1/admin/users/organizer"
+  ],
+  "ms-events:8082": [
+    "GET /api/v1/events",
+    "POST /api/v1/events",
+    "GET /api/v1/events/my-events",
+    "GET /api/v1/events/{id}",
+    "GET /api/v1/events/{eventId}/ticket-categories/{ticketCategoryId}",
+    "PUT /api/v1/events/{id}",
+    "PATCH /api/v1/events/{id}/publish",
+    "PATCH /api/v1/events/{id}/cancel",
+    "GET /api/v1/venues",
+    "POST /api/v1/venues",
+    "GET /api/v1/venues/{id}"
+  ],
+  "ms-orders:8083": [
+    "POST /api/v1/orders",
+    "GET /api/v1/orders/my-orders",
+    "GET /api/v1/orders/{id}",
+    "PATCH /api/v1/orders/{id}/cancel",
+    "POST /api/v1/orders/{id}/payment"
+  ],
+  "ms-tickets:8084": [
+    "GET /api/v1/tickets/me",
+    "GET /api/v1/tickets/{ticketCode}",
+    "PATCH /api/v1/tickets/{ticketCode}/use"
+  ]
+}

@@ -12,6 +12,7 @@ import cl.eventpass.ms_events.dto.response.StandardResponse;
 import cl.eventpass.ms_events.enums.EventCategory;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.enums.ParameterIn;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -139,6 +140,10 @@ public interface EventsControllerDocs {
                     description = "Catálogo de eventos obtenido exitosamente."
             )
     })
+    @Parameter(name = "page", in = ParameterIn.QUERY, example = "0",
+            schema = @Schema(type = "integer", minimum = "0"))
+    @Parameter(name = "size", in = ParameterIn.QUERY, example = "5",
+            schema = @Schema(type = "integer", minimum = "1"))
     ResponseEntity<StandardResponse<Page<EventResponse>>> getPublishedEvents(
             @Parameter(
                     description = "Categoría por la cual filtrar los eventos. "
@@ -153,6 +158,7 @@ public interface EventsControllerDocs {
                     sort = "startDate",
                     direction = Sort.Direction.ASC
             )
+            @Parameter(hidden = true)
             Pageable pageable
     );
 
@@ -189,6 +195,10 @@ public interface EventsControllerDocs {
                     )
             )
     })
+    @Parameter(name = "page", in = ParameterIn.QUERY, example = "0",
+            schema = @Schema(type = "integer", minimum = "0"))
+    @Parameter(name = "size", in = ParameterIn.QUERY, example = "5",
+            schema = @Schema(type = "integer", minimum = "1"))
     ResponseEntity<StandardResponse<Page<EventResponse>>> getOrganizerEvents(
             @Parameter(hidden = true)
             UUID organizerId,
@@ -198,6 +208,7 @@ public interface EventsControllerDocs {
                     sort = "createdAt",
                     direction = Sort.Direction.DESC
             )
+            @Parameter(hidden = true)
             Pageable pageable
     );
 

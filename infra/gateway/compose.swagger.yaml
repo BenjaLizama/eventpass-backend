@@ -1,0 +1,13 @@
+services:
+  swagger:
+    image: node:22-alpine
+    command: ["node", "/app/swagger.mjs"]
+    environment:
+      EVENTPASS_API_ID: ${EVENTPASS_API_ID:?Define el ApiId de Floci}
+    volumes:
+      - ./swagger.mjs:/app/swagger.mjs:ro
+      - ./routes.json:/app/routes.json:ro
+    ports:
+      - "127.0.0.1:8090:8090"
+    networks:
+      - eventpass

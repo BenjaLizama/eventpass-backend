@@ -6,6 +6,12 @@ El sistema permite gestionar usuarios, eventos, recintos, órdenes de compra y e
 
 La arquitectura aplica el patrón **Database per Service**, comunicación REST para operaciones síncronas y **AWS SQS** para procesamiento asíncrono.
 
+## Pruebas locales
+
+Copia `.env.example` a `.env` para ejecutar Docker Compose con la configuración de desarrollo. Los valores de ejemplo son exclusivos del entorno local. Cada microservicio conserva sus perfiles Spring para ejecutarse también de forma independiente.
+
+La [guía de Swagger y API Gateway](infra/gateway/README.md) muestra cómo probar la compra con Floci y los microservicios en la red privada de Docker. GitHub Actions ejecuta las pruebas directas y las del entorno simulado sin una cuenta de AWS.
+
 ---
 
 ## 🏛️ Arquitectura

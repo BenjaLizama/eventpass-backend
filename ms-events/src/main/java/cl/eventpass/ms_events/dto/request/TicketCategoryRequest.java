@@ -4,6 +4,7 @@ import jakarta.validation.constraints.*;
 
 import java.math.BigDecimal;
 
+@io.swagger.v3.oas.annotations.media.Schema(example = "{\"name\":\"General\",\"price\":10000,\"totalCapacity\":10,\"maxPerUser\":2}")
 public record TicketCategoryRequest(
         @NotBlank(message = "El nombre de la localidad es obligatorio")
         @Size(max = 100, message = "El nombre no puede superar los 100 caracteres")

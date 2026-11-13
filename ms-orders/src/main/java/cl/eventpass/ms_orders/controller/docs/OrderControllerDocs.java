@@ -6,6 +6,7 @@ import cl.eventpass.ms_orders.dto.response.StandardErrorResponse;
 import cl.eventpass.ms_orders.dto.response.StandardResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.enums.ParameterIn;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -13,7 +14,6 @@ import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
-import org.springdoc.core.annotations.ParameterObject;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.ResponseEntity;
@@ -200,8 +200,12 @@ public interface OrderControllerDocs {
                     )
             )
     })
+    @Parameter(name = "page", in = ParameterIn.QUERY, example = "0",
+            schema = @Schema(type = "integer", minimum = "0"))
+    @Parameter(name = "size", in = ParameterIn.QUERY, example = "5",
+            schema = @Schema(type = "integer", minimum = "1"))
     ResponseEntity<StandardResponse<Page<OrderResponse>>> getMyOrders(
-            @ParameterObject
+            @Parameter(hidden = true)
             Pageable pageable,
 
             @Parameter(

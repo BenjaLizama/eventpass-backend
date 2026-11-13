@@ -6,6 +6,7 @@ import jakarta.validation.constraints.Size;
 import java.time.Instant;
 import java.util.UUID;
 
+@io.swagger.v3.oas.annotations.media.Schema(example = "{\"title\":\"Concierto Demo actualizado\"}")
 public record EventUpdateRequest(
         @Size(max = 200, message = "El título no puede superar los 200 caracteres")
         String title,

@@ -55,6 +55,8 @@ jobs:
               - 'e2e-tests/**'
               - 'docker-compose.yml'
               - 'scripts/**'
+              - 'infra/**'
+              - '.env.example'
               - '.github/workflows/tests.yml'
 
   ms-auth-tests:
@@ -167,35 +169,8 @@ jobs:
           cache: maven
           cache-dependency-path: e2e-tests/pom.xml
 
-      - name: Create environment file
-        run: |
-          cat > .env <<EOF
-          SPRING_PROFILES_ACTIVE=dev
-          JWT_SECRET=${{ secrets.JWT_SECRET }}
-          AWS_REGION=us-east-1
-          AWS_ACCESS_KEY_ID=test
-          AWS_SECRET_ACCESS_KEY=test
-          REDIS_PORT=6379
-          LOCALSTACK_PORT=4566
-          POSTGRES_AUTH_DB=eventpass_auth
-          POSTGRES_AUTH_USER=postgres
-          POSTGRES_AUTH_PASSWORD=password
-          POSTGRES_AUTH_PORT=5432
-          POSTGRES_EVENTS_DB=eventpass_events
-          POSTGRES_EVENTS_USER=postgres
-          POSTGRES_EVENTS_PASSWORD=password
-          POSTGRES_EVENTS_PORT=5433
-          POSTGRES_ORDERS_DB=eventpass_orders
-          POSTGRES_ORDERS_USER=postgres
-          POSTGRES_ORDERS_PASSWORD=password
-          POSTGRES_ORDERS_PORT=5434
-          MONGODB_TICKETS_PORT=27018
-          MONGODB_TICKETS_DATABASE=eventpass_tickets
-          MS_ORDERS_CLIENT_ID=${{ secrets.MS_ORDERS_CLIENT_ID }}
-          MS_ORDERS_CLIENT_SECRET=${{ secrets.MS_ORDERS_CLIENT_SECRET }}
-          E2E_ADMIN_EMAIL=admin@eventpass.cl
-          E2E_ADMIN_PASSWORD=Cambiame123!
-          EOF
+      - name: Create local test environment
+        run: cp .env.example .env
 
       - name: Start platform
         run: docker compose --env-file .env up -d --build
@@ -220,12 +195,54 @@ jobs:
 
       - name: Run E2E tests
         env:
-          MS_ORDERS_CLIENT_ID: ${{ secrets.MS_ORDERS_CLIENT_ID }}
-          MS_ORDERS_CLIENT_SECRET: ${{ secrets.MS_ORDERS_CLIENT_SECRET }}
+          MS_ORDERS_CLIENT_ID: eventpass-ms-orders
+          MS_ORDERS_CLIENT_SECRET: eventpass-local-demo-secret
         run: >
           ./ms-auth/mvnw -f e2e-tests/pom.xml
           "-Dit.test=PlatformHealthIT,EventPassPurchaseFlowIT,OrderCancellationRestoresCapacityIT,OrderPerUserLimitIT,OrderInsufficientCapacityIT,TicketAccessControlIT,OrderItemCapacityIT"
           verify
+
+      - name: Test Swagger and API Gateway in private mode
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $PSNativeCommandUseErrorActionPreference = $true
+          foreach ($target in @(
+            @{ port = 8082; path = '/api/v1/events' },
+            @{ port = 8082; path = '/api/v1/events/my-events' },
+            @{ port = 8082; path = '/api/v1/venues' },
+            @{ port = 8083; path = '/api/v1/orders/my-orders' }
+          )) {
+            $individual = Invoke-RestMethod "http://127.0.0.1:$($target.port)/v3/api-docs"
+            $query = $individual.paths.($target.path).get.parameters.name
+            if ($query -contains 'pageable' -or $query -contains 'sort' -or $query -notcontains 'page' -or $query -notcontains 'size') {
+              throw "Paginación incorrecta en $($target.path)."
+            }
+          }
+          docker compose -f docker-compose.yml -f infra/gateway/compose.private.yaml up -d --wait --wait-timeout 240
+          docker compose -p eventpass-gateway -f infra/gateway/compose.yaml up -d
+          $gateway = ./infra/gateway/start-local-gateway.ps1 -SmokeTest
+          $env:EVENTPASS_API_ID = $gateway.ApiId
+          docker compose -p eventpass-gateway -f infra/gateway/compose.yaml -f infra/gateway/compose.swagger.yaml up -d
+          $base = 'http://127.0.0.1:8090'
+          $spec = Invoke-RestMethod "$base/openapi.json" -TimeoutSec 30 -MaximumRetryCount 8 -RetryIntervalSec 2
+          $parameters = $spec.paths.'/api/v1/events'.get.parameters.name
+          if ($parameters -contains 'pageable' -or $parameters -notcontains 'page' -or $parameters -notcontains 'size') {
+            throw 'La paginación del catálogo debe documentar page y size por separado.'
+          }
+          $catalog = Invoke-RestMethod "$base/api/v1/events?page=0&size=5"
+          if ($catalog.status -ne 200) { throw 'El catálogo no respondió a través de Swagger y Floci.' }
+          foreach ($port in 8081..8084) {
+            if (docker ps --filter "publish=$port" --format '{{.Names}}') {
+              throw "El puerto $port sigue publicado."
+            }
+          }
+          $env:AUTH_BASE_URL = $env:EVENTS_BASE_URL = $env:ORDERS_BASE_URL = $env:TICKETS_BASE_URL = $base
+          ./ms-auth/mvnw -B -f e2e-tests/pom.xml '-Dit.test=*,!PlatformHealthIT,!OrderItemCapacityIT' verify
+
+      - name: Test SQS and Lambda with Floci
+        shell: pwsh
+        run: ./infra/lambda-smoke/test-local-lambda.ps1
 
       - name: Show logs on failure
         if: failure()

@@ -4,6 +4,7 @@ import jakarta.validation.constraints.*;
 
 import java.math.BigDecimal;
 
+@io.swagger.v3.oas.annotations.media.Schema(example = "{\"name\":\"Recinto Demo EventPass\",\"address\":\"Avenida de Prueba 123\",\"city\":\"Santiago\",\"country\":\"Chile\",\"capacity\":100}")
 public record VenueRequest(
         @NotBlank(message = "El nombre del recinto es obligatorio")
         @Size(max = 150, message = "El nombre no puede superar los 150 caracteres")

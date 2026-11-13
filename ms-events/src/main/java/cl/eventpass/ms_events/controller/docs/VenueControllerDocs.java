@@ -6,6 +6,7 @@ import cl.eventpass.ms_events.dto.response.StandardResponse;
 import cl.eventpass.ms_events.dto.response.VenueResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.enums.ParameterIn;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -116,11 +117,16 @@ public interface VenueControllerDocs {
                     description = "Lista de recintos obtenida exitosamente."
             )
     })
+    @Parameter(name = "page", in = ParameterIn.QUERY, example = "0",
+            schema = @Schema(type = "integer", minimum = "0"))
+    @Parameter(name = "size", in = ParameterIn.QUERY, example = "5",
+            schema = @Schema(type = "integer", minimum = "1"))
     ResponseEntity<StandardResponse<Page<VenueResponse>>> getAllVenues(
             @PageableDefault(
                     size = 10,
                     sort = "name"
             )
+            @Parameter(hidden = true)
             Pageable pageable
     );
 

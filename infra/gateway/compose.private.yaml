@@ -1,0 +1,21 @@
+services:
+  postgres-auth:
+    ports: !reset []
+  postgres-events:
+    ports: !reset []
+  postgres-orders:
+    ports: !reset []
+  mongodb-tickets:
+    ports: !reset []
+  redis:
+    ports: !reset []
+  localstack:
+    ports: !reset []
+  ms-auth:
+    ports: !reset []
+  ms-events:
+    ports: !reset []
+  ms-orders:
+    ports: !reset []
+  ms-tickets:
+    ports: !reset []

@@ -5,6 +5,7 @@ import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 
+@io.swagger.v3.oas.annotations.media.Schema(example = "{\"email\":\"comprador.demo@example.com\",\"password\":\"EventPassDemo123!\"}")
 public record RegisterRequest(
         @JsonProperty("email")
         @NotBlank(message = "El email es obligatorio.")

@@ -42,6 +42,9 @@ public class OrderServiceImpl implements OrderService {
     private final OrderCapacityService orderCapacityService;
     private final OrderMapper orderMapper;
 
+    @org.springframework.beans.factory.annotation.Value("${app.orders.async-purchase:false}")
+    private boolean asyncPurchase;
+
     @Override
     @Transactional
     public OrderResponse createOrder(
@@ -66,6 +69,8 @@ public class OrderServiceImpl implements OrderService {
                         request.ticketCategoryId(),
                         List.of(
                                 OrderStatus.PENDING,
+                                OrderStatus.AWAITING_PAYMENT,
+                                OrderStatus.PENDING_ISSUANCE,
                                 OrderStatus.PAID
                         )
                 );
@@ -99,12 +104,10 @@ public class OrderServiceImpl implements OrderService {
 
         try {
 
-            eventsClient.reserveCapacity(
-                    request.eventId(),
-                    reservationRequest
-            );
-
-            capacityReserved = true;
+            if (!asyncPurchase) {
+                eventsClient.reserveCapacity(request.eventId(), reservationRequest);
+                capacityReserved = true;
+            }
 
             Instant expiresAt =
                     Instant.now()
@@ -117,7 +120,7 @@ public class OrderServiceImpl implements OrderService {
                     OrderEntity.builder()
                             .userId(userId)
                             .totalAmount(totalAmount)
-                            .status(OrderStatus.PENDING)
+                            .status(asyncPurchase ? OrderStatus.AWAITING_PAYMENT : OrderStatus.PENDING)
                             .paymentStatus(PaymentStatus.PENDING)
                             .expiresAt(expiresAt)
                             .build();
@@ -230,13 +233,15 @@ public class OrderServiceImpl implements OrderService {
                                 )
                         );
 
-        if (order.getStatus() != OrderStatus.PENDING) {
+        if (order.getStatus() != OrderStatus.PENDING && order.getStatus() != OrderStatus.AWAITING_PAYMENT) {
             throw new BusinessRuleException(
                     "Solo se pueden cancelar órdenes en estado PENDING."
             );
         }
 
-        orderCapacityService.releaseCapacity(order);
+        if (order.getStatus() == OrderStatus.PENDING) {
+            orderCapacityService.releaseCapacity(order);
+        }
 
         order.setStatus(OrderStatus.CANCELLED);
 

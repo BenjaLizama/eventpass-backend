@@ -28,6 +28,9 @@ public class OrderCompletedOutboxPublisher {
     @Value("${sqs.queues.order-completed}")
     private String queue;
 
+    @Value("${app.orders.purchase-queue:eventpass-purchase-pending}")
+    private String purchaseQueue;
+
     @Scheduled(
             initialDelayString = "${app.orders.outbox.poll-delay-ms:1000}",
             fixedDelayString = "${app.orders.outbox.poll-delay-ms:1000}"
@@ -59,7 +62,7 @@ public class OrderCompletedOutboxPublisher {
         PendingOrder order = pending.get();
         try {
             OrderCompletedEvent event = mapper.readValue(order.payload(), OrderCompletedEvent.class);
-            sqs.send(request -> request.queue(queue).payload(event));
+            sqs.send(request -> request.queue(event.pendingIssuance() ? purchaseQueue : queue).payload(event));
         } catch (RuntimeException | JsonProcessingException e) {
             jdbc.sql("""
                     UPDATE order_completed_outbox

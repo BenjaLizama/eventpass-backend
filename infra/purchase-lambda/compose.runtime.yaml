@@ -1,0 +1,8 @@
+services:
+  floci-gateway:
+    environment:
+      FLOCI_HOSTNAME: floci-gateway
+      FLOCI_SERVICES_DOCKER_NETWORK: eventpass_network
+      FLOCI_SERVICES_LAMBDA_EPHEMERAL: "true"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock

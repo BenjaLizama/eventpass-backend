@@ -56,6 +56,7 @@ public class PaymentServiceImpl implements PaymentService {
                         );
 
         validateOrderForPayment(order);
+        boolean pendingIssuance = order.getStatus() == OrderStatus.AWAITING_PAYMENT;
 
         PaymentResult result =
                 paymentProvider.processPayment(
@@ -66,11 +67,13 @@ public class PaymentServiceImpl implements PaymentService {
         if (result == PaymentResult.APPROVED) {
 
             order.setPaymentStatus(PaymentStatus.APPROVED);
-            order.setStatus(OrderStatus.PAID);
+            order.setStatus(pendingIssuance ? OrderStatus.PENDING_ISSUANCE : OrderStatus.PAID);
 
         } else {
 
-            orderCapacityService.releaseCapacity(order);
+            if (!pendingIssuance) {
+                orderCapacityService.releaseCapacity(order);
+            }
 
             order.setPaymentStatus(PaymentStatus.REJECTED);
             order.setStatus(OrderStatus.CANCELLED);
@@ -84,7 +87,7 @@ public class PaymentServiceImpl implements PaymentService {
                         savedOrder.getId()
                 );
 
-        if (savedOrder.getStatus() == OrderStatus.PAID) {
+        if (result == PaymentResult.APPROVED) {
 
             OrderCompletedEvent event =
                     new OrderCompletedEvent(
@@ -99,7 +102,8 @@ public class PaymentServiceImpl implements PaymentService {
                                                     item.getQuantity()
                                             )
                                     )
-                                    .toList()
+                                    .toList(),
+                            pendingIssuance
                     );
 
             applicationEventPublisher.publishEvent(
@@ -115,7 +119,7 @@ public class PaymentServiceImpl implements PaymentService {
 
     private void validateOrderForPayment(OrderEntity order) {
 
-        if (order.getStatus() != OrderStatus.PENDING) {
+        if (order.getStatus() != OrderStatus.PENDING && order.getStatus() != OrderStatus.AWAITING_PAYMENT) {
             throw new BusinessRuleException(
                     "Solo se pueden procesar pagos de órdenes en estado PENDING."
             );

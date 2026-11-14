@@ -37,11 +37,14 @@ public interface PaymentControllerDocs {
                     el usuario propietario de la orden.
 
                     Solo pueden procesarse pagos de órdenes que se encuentren
-                    en estado PENDING y cuya fecha de expiración aún no haya sido
+                    en estado PENDING o AWAITING_PAYMENT y cuya fecha de expiración aún no haya sido
                     alcanzada.
 
                     Si el proveedor de pago aprueba la transacción, la orden
-                    pasa a estado PAID y el estado de pago pasa a APPROVED.
+                    registra el pago como APPROVED. En modo asíncrono queda
+                    PENDING_ISSUANCE hasta que Lambda confirme la emisión (PAID)
+                    o registre REJECTED_NO_CAPACITY y REFUNDED si no hay cupo.
+                    Las órdenes del flujo anterior pasan directamente a PAID.
 
                     Si el proveedor rechaza la transacción, la orden pasa a
                     estado CANCELLED, el estado de pago pasa a REJECTED y se

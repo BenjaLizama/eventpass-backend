@@ -6,6 +6,10 @@ import java.util.UUID;
 public record OrderCompletedEvent(
         UUID orderId,
         UUID userId,
-        List<OrderCompletedItem> items
+        List<OrderCompletedItem> items,
+        boolean pendingIssuance
 ) {
+    public OrderCompletedEvent(UUID orderId, UUID userId, List<OrderCompletedItem> items) {
+        this(orderId, userId, items, false);
+    }
 }

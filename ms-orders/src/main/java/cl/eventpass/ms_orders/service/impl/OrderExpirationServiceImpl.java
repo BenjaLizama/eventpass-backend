@@ -30,6 +30,10 @@ public class OrderExpirationServiceImpl implements OrderExpirationService {
                         OrderStatus.PENDING,
                         Instant.now()
                 );
+        for (OrderEntity order : orderRepository.findExpiredOrders(OrderStatus.AWAITING_PAYMENT, Instant.now())) {
+            order.setStatus(OrderStatus.EXPIRED);
+            orderRepository.save(order);
+        }
 
         if (expiredOrders.isEmpty()) {
             return;

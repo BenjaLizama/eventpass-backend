@@ -1,5 +1,17 @@
 # API Gateway local con Floci
 
+Abre Docker Desktop y espera a que el motor esté listo. Desde la raíz, en PowerShell 7, ejecuta:
+
+```powershell
+.\infra\gateway\start-local-demo.ps1
+```
+
+El script arranca EventPass en modo privado, levanta Floci, configura las rutas y comprueba el catálogo desde Swagger. Abre la dirección fija [Swagger de EventPass](http://127.0.0.1:8090/). Repite el comando después de apagar el PC. La URL de Floci puede cambiar. Usa `-Build` si cambió el código Java o `-SmokeTest` para ejecutar las comprobaciones del Gateway.
+
+Docker Desktop inicia el motor y puede volver a arrancar contenedores. El script aprovisiona la API dentro de Floci y configura Swagger con su ApiId.
+
+## Arranque manual
+
 Desde la raíz de EventPass, con Docker Desktop disponible y PowerShell 7:
 
 ```powershell

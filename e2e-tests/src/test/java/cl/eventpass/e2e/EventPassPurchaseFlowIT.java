@@ -52,7 +52,8 @@ class EventPassPurchaseFlowIT {
         String runId = UUID.randomUUID().toString();
         String password = "Password123!";
         int quantity = 2;
-        int capacity = 10;
+        boolean asyncPurchase = Boolean.parseBoolean(System.getenv("E2E_ASYNC_PURCHASE"));
+        int capacity = asyncPurchase ? quantity : 10;
 
         String adminToken = login(
                 requiredEnv("E2E_ADMIN_EMAIL"),
@@ -173,7 +174,7 @@ class EventPassPurchaseFlowIT {
         String orderId = requiredText(order, "id");
 
         assertEquals(customerId, order.path("userId").asText());
-        assertEquals("PENDING", order.path("status").asText());
+        assertEquals(asyncPurchase ? "AWAITING_PAYMENT" : "PENDING", order.path("status").asText());
         assertEquals("PENDING", order.path("paymentStatus").asText());
 
         assertEquals(
@@ -187,10 +188,10 @@ class EventPassPurchaseFlowIT {
         );
 
         assertEquals(
-                capacity - quantity,
+                asyncPurchase ? capacity : capacity - quantity,
                 category(eventId, categoryId)
                         .path("availableCapacity").asInt(-1),
-                "La creación de la orden debe reservar capacidad"
+                "Aforo después de crear la orden"
         );
 
         JsonNode paidOrder = data(
@@ -203,7 +204,7 @@ class EventPassPurchaseFlowIT {
         );
 
         assertEquals(
-                "PAID",
+                asyncPurchase ? "PENDING_ISSUANCE" : "PAID",
                 paidOrder.path("status").asText(),
                 "El entorno debe tener el pago simulado en APPROVED"
         );
@@ -214,7 +215,7 @@ class EventPassPurchaseFlowIT {
 
         await()
                 .alias("Emisión de tickets para la orden " + orderId)
-                .atMost(Duration.ofSeconds(30))
+                .atMost(Duration.ofSeconds(asyncPurchase ? 150 : 30))
                 .pollInterval(Duration.ofMillis(500))
                 .untilAsserted(() -> {
                     List<JsonNode> generated = ticketsForOrder(
@@ -222,6 +223,10 @@ class EventPassPurchaseFlowIT {
                     );
 
                     assertEquals(quantity, generated.size());
+                    if (asyncPurchase) {
+                        assertEquals("PAID", data("GET", orders, "/api/v1/orders/" + orderId,
+                                customerToken, null, 200).path("status").asText());
+                    }
 
                     for (JsonNode ticket : generated) {
                         assertEquals(
@@ -257,6 +262,51 @@ class EventPassPurchaseFlowIT {
         List<JsonNode> generated = ticketsForOrder(
                 customerToken, orderId
         );
+
+        if (asyncPurchase) {
+            String secondEmail = "segundo-" + runId + "@test.com";
+            data("POST", auth, "/api/v1/auth/register", null,
+                    Map.of("email", secondEmail, "password", password), 201);
+            String secondToken = login(secondEmail, password);
+            JsonNode second = data("POST", orders, "/api/v1/orders", secondToken,
+                    Map.of("eventId", eventId, "ticketCategoryId", categoryId, "quantity", 1), 201);
+            String secondId = requiredText(second, "id");
+            String path = "/api/v1/orders/" + secondId;
+            assertEquals("PENDING_ISSUANCE", data("POST", orders, path + "/payment", secondToken,
+                    Map.of("paymentMethod", "CARD"), 200).path("status").asText());
+            await().atMost(Duration.ofSeconds(150)).untilAsserted(() -> {
+                JsonNode rejected = data("GET", orders, path, secondToken, null, 200);
+                assertEquals("REJECTED_NO_CAPACITY", rejected.path("status").asText());
+                assertEquals("REFUNDED", rejected.path("paymentStatus").asText());
+                assertTrue(ticketsForOrder(secondToken, secondId).isEmpty());
+                assertEquals(0, category(eventId, categoryId).path("availableCapacity").asInt(-1));
+            });
+
+            replayPurchase(order);
+            replayPurchase(second);
+            await().alias("Consumo de las compras reenviadas")
+                    .atMost(Duration.ofSeconds(150))
+                    .untilAsserted(() -> {
+                        JsonNode attributes = sqs("GetQueueAttributes", Map.of(
+                                "QueueUrl", purchaseQueueUrl(),
+                                "AttributeNames", List.of("ApproximateNumberOfMessages",
+                                        "ApproximateNumberOfMessagesNotVisible")
+                        )).path("Attributes");
+                        assertEquals(0, attributes.path("ApproximateNumberOfMessages").asInt(-1));
+                        assertEquals(0, attributes.path("ApproximateNumberOfMessagesNotVisible").asInt(-1));
+                    });
+
+            assertEquals(generated.stream().map(ticket -> ticket.path("ticketCode").asText()).sorted().toList(),
+                    ticketsForOrder(customerToken, orderId).stream()
+                            .map(ticket -> ticket.path("ticketCode").asText()).sorted().toList());
+            assertEquals("PAID", data("GET", orders, "/api/v1/orders/" + orderId,
+                    customerToken, null, 200).path("status").asText());
+            JsonNode refunded = data("GET", orders, path, secondToken, null, 200);
+            assertEquals("REJECTED_NO_CAPACITY", refunded.path("status").asText());
+            assertEquals("REFUNDED", refunded.path("paymentStatus").asText());
+            assertTrue(ticketsForOrder(secondToken, secondId).isEmpty());
+            assertEquals(0, category(eventId, categoryId).path("availableCapacity").asInt(-1));
+        }
 
         String ticketCode = requiredText(
                 generated.get(0), "ticketCode"
@@ -322,6 +372,41 @@ class EventPassPurchaseFlowIT {
                         .path("availableCapacity").asInt(-1),
                 "El pago no debe descontar nuevamente la capacidad"
         );
+    }
+
+    private String purchaseQueueUrl() throws Exception {
+        return requiredText(sqs("GetQueueUrl", Map.of("QueueName", "eventpass-purchase-pending")), "QueueUrl");
+    }
+
+    private void replayPurchase(JsonNode order) throws Exception {
+        List<Map<String, Object>> items = new ArrayList<>();
+        for (JsonNode item : order.path("items")) {
+            items.add(Map.of(
+                    "orderItemId", requiredText(item, "id"),
+                    "eventId", requiredText(item, "eventId"),
+                    "ticketCategoryId", requiredText(item, "ticketCategoryId"),
+                    "quantity", item.path("quantity").asInt()
+            ));
+        }
+        String message = mapper.writeValueAsString(Map.of(
+                "orderId", requiredText(order, "id"),
+                "userId", requiredText(order, "userId"),
+                "items", items,
+                "pendingIssuance", true
+        ));
+        requiredText(sqs("SendMessage", Map.of("QueueUrl", purchaseQueueUrl(), "MessageBody", message)), "MessageId");
+    }
+
+    private JsonNode sqs(String action, Map<String, ?> body) throws Exception {
+        HttpRequest request = HttpRequest.newBuilder(URI.create("http://127.0.0.1:4567"))
+                .timeout(Duration.ofSeconds(10))
+                .header("Content-Type", "application/x-amz-json-1.0")
+                .header("X-Amz-Target", "AmazonSQS." + action)
+                .POST(HttpRequest.BodyPublishers.ofString(mapper.writeValueAsString(body)))
+                .build();
+        HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+        assertEquals(200, response.statusCode(), response::body);
+        return mapper.readTree(response.body());
     }
 
     private JsonNode category(

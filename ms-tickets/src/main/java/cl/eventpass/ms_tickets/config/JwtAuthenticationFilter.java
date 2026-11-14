@@ -56,13 +56,17 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
             String userId = claims.get("userId", String.class);
 
+            boolean service = "SERVICE".equals(claims.get("tokenType", String.class));
+            if (service) {
+                userId = claims.get("serviceName", String.class);
+            }
             if (userId == null || userId.isBlank()) {
                 throw new IllegalArgumentException(
                         "El JWT no contiene un userId válido."
                 );
             }
 
-            if (!hasActiveUserSession(claims)) {
+            if (!service && !hasActiveUserSession(claims)) {
                 response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
                 return;
             }

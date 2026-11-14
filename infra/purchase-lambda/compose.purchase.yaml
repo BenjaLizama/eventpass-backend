@@ -1,0 +1,8 @@
+services:
+  ms-orders:
+    environment:
+      APP_ORDERS_ASYNC_PURCHASE: "true"
+      AWS_SQS_ENDPOINT: http://floci-gateway:4566
+  ms-tickets:
+    environment:
+      AWS_SQS_ENDPOINT: http://floci-gateway:4566

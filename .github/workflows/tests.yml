@@ -219,22 +219,22 @@ jobs:
               throw "Paginación incorrecta en $($target.path)."
             }
           }
-          docker compose -f docker-compose.yml -f infra/gateway/compose.private.yaml up -d --wait --wait-timeout 240
-          docker compose -p eventpass-gateway -f infra/gateway/compose.yaml up -d
-          $gateway = ./infra/gateway/start-local-gateway.ps1 -SmokeTest
-          $env:EVENTPASS_API_ID = $gateway.ApiId
-          docker compose -p eventpass-gateway -f infra/gateway/compose.yaml -f infra/gateway/compose.swagger.yaml up -d
-          $base = 'http://127.0.0.1:8090'
-          $spec = Invoke-RestMethod "$base/openapi.json" -TimeoutSec 30 -MaximumRetryCount 8 -RetryIntervalSec 2
+          $demo = ./infra/gateway/start-local-demo.ps1 -SmokeTest
+          $base = $demo.Swagger.TrimEnd('/')
+          $spec = Invoke-RestMethod "$base/openapi.json" -TimeoutSec 30
           $parameters = $spec.paths.'/api/v1/events'.get.parameters.name
           if ($parameters -contains 'pageable' -or $parameters -notcontains 'page' -or $parameters -notcontains 'size') {
             throw 'La paginación del catálogo debe documentar page y size por separado.'
           }
           $catalog = Invoke-RestMethod "$base/api/v1/events?page=0&size=5"
           if ($catalog.status -ne 200) { throw 'El catálogo no respondió a través de Swagger y Floci.' }
-          foreach ($port in 8081..8084) {
-            if (docker ps --filter "publish=$port" --format '{{.Names}}') {
-              throw "El puerto $port sigue publicado."
+          foreach ($service in 'ms-auth', 'ms-events', 'ms-orders', 'ms-tickets') {
+            $id = docker compose ps -q $service
+            $container = docker inspect $id | ConvertFrom-Json
+            $bindings = $container.NetworkSettings.Ports.PSObject.Properties |
+              Where-Object { $_.Value }
+            if ($bindings) {
+              throw "$service tiene puertos publicados en el host."
             }
           }
           $env:AUTH_BASE_URL = $env:EVENTS_BASE_URL = $env:ORDERS_BASE_URL = $env:TICKETS_BASE_URL = $base
@@ -249,3 +249,5 @@ jobs:
         run: |
           docker compose ps
           docker compose logs --tail=300
+          docker logs --tail=100 eventpass-gateway-floci-gateway-1 || true
+          docker logs --tail=100 eventpass-gateway-swagger-1 || true

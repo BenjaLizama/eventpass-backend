@@ -5,12 +5,14 @@ import org.bson.UuidRepresentation;
 import org.springframework.boot.mongodb.autoconfigure.MongoClientSettingsBuilderCustomizer;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Profile;
 import org.springframework.data.domain.AuditorAware;
 import org.springframework.data.mongodb.config.EnableMongoAuditing;
 
 import java.util.Optional;
 
 @Configuration
+@Profile("!dynamodb")
 @EnableMongoAuditing
 public class MongoConfig implements MongoClientSettingsBuilderCustomizer {
 

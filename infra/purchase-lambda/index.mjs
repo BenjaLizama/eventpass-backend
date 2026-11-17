@@ -1,7 +1,7 @@
 import { processOrder } from './process-order.mjs';
 
 async function call(service, path, method, body, token) {
-  const response = await fetch('http://' + service + path, {
+  const response = await fetch(service.replace(/\/+$/, '') + path, {
     method,
     headers: {
       'Content-Type': 'application/json',
@@ -15,7 +15,11 @@ async function call(service, path, method, body, token) {
 }
 
 export async function handler(event) {
-  const credentials = await call('ms-auth:8081', '/api/v1/auth/service-token', 'POST', {
+  const auth = process.env.AUTH_SERVICE_URL ?? 'http://ms-auth:8081';
+  const events = process.env.EVENTS_SERVICE_URL ?? 'http://ms-events:8082';
+  const tickets = process.env.TICKETS_SERVICE_URL ?? 'http://ms-tickets:8084';
+  const orders = process.env.ORDERS_SERVICE_URL ?? 'http://ms-orders:8083';
+  const credentials = await call(auth, '/api/v1/auth/service-token', 'POST', {
     clientId: process.env.MS_ORDERS_CLIENT_ID,
     clientSecret: process.env.MS_ORDERS_CLIENT_SECRET
   });
@@ -23,14 +27,14 @@ export async function handler(event) {
   if (!token) throw new Error('Auth no devolvió un token de servicio.');
   for (const record of event.Records) {
     await processOrder(JSON.parse(record.body), {
-      reserve: item => call('ms-events:8082',
+      reserve: item => call(events,
         '/api/v1/events/' + item.eventId + '/reservations/' + item.orderItemId, 'PUT',
         { ticketCategoryId: item.ticketCategoryId, quantity: item.quantity }, token),
-      issue: order => call('ms-tickets:8084', '/internal/tickets/issue', 'POST', {
+      issue: order => call(tickets, '/internal/tickets/issue', 'POST', {
         orderId: order.orderId, userId: order.userId, items: order.items
       }, token),
-      complete: id => call('ms-orders:8083', '/internal/purchases/' + id + '/result', 'PUT', 'ISSUED', token),
-      refund: id => call('ms-orders:8083', '/internal/purchases/' + id + '/result', 'PUT', 'NO_CAPACITY', token)
+      complete: id => call(orders, '/internal/purchases/' + id + '/result', 'PUT', 'ISSUED', token),
+      refund: id => call(orders, '/internal/purchases/' + id + '/result', 'PUT', 'NO_CAPACITY', token)
     });
   }
 }

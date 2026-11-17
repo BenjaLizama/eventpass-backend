@@ -244,6 +244,18 @@ jobs:
         shell: pwsh
         run: ./infra/lambda-smoke/test-local-lambda.ps1
 
+      - name: Test asynchronous purchases and dead-letter recovery
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $PSNativeCommandUseErrorActionPreference = $true
+          ./infra/purchase-lambda/start-local-purchase.ps1 -VisibilityTimeout 25 -MaxReceiveCount 2
+          $env:E2E_ASYNC_PURCHASE = 'true'
+          $env:E2E_INTERRUPT_TICKETS = 'true'
+          $env:E2E_PURCHASE_DLQ = 'true'
+          $env:AUTH_BASE_URL = $env:EVENTS_BASE_URL = $env:ORDERS_BASE_URL = $env:TICKETS_BASE_URL = 'http://127.0.0.1:8090'
+          ./ms-auth/mvnw -B -f e2e-tests/pom.xml '-Dit.test=EventPassPurchaseFlowIT,TicketAccessControlIT' verify
+
       - name: Show logs on failure
         if: failure()
         run: |
@@ -251,3 +263,59 @@ jobs:
           docker compose logs --tail=300
           docker logs --tail=100 eventpass-gateway-floci-gateway-1 || true
           docker logs --tail=100 eventpass-gateway-swagger-1 || true
+
+  deployment-checks:
+    name: Production Profiles and Deployment Definitions
+    needs: changes
+    if: needs.changes.outputs.e2e == 'true'
+    runs-on: ubuntu-latest
+    env:
+      E2E_ADMIN_EMAIL: admin@eventpass.cl
+      E2E_ADMIN_PASSWORD: Cambiame123!
+      MS_ORDERS_CLIENT_ID: eventpass-ms-orders
+      MS_ORDERS_CLIENT_SECRET: eventpass-local-demo-secret
+      E2E_CHECK_TICKET_REPLAY: 'true'
+      AUTH_BASE_URL: http://127.0.0.1:18081
+      EVENTS_BASE_URL: http://127.0.0.1:18082
+      ORDERS_BASE_URL: http://127.0.0.1:18083
+      TICKETS_BASE_URL: http://127.0.0.1:18084
+      COMPOSE_PROJECT_NAME: eventpass-dynamo-verify
+      COMPOSE_FILE: docker-compose.yml:infra/gateway/compose.private.yaml:infra/database/compose.verify.yaml:infra/database/compose.dynamodb.yaml
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+          cache-dependency-path: e2e-tests/pom.xml
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Test Lambda and render ECS task definitions
+        run: |
+          node --test infra/purchase-lambda/*.test.mjs
+          node infra/aws/render-task-definitions.mjs infra/aws/task-config.example.json "$RUNNER_TEMP/eventpass-tasks"
+          for service in auth events orders tickets; do
+            jq -e --arg family "eventpass-ms-$service" '
+              .family == $family and .networkMode == "awsvpc"
+              and (.containerDefinitions[0].secrets | any(.name == "JWT_SECRET"))
+              and (.containerDefinitions[0].environment | all(.name != "JWT_SECRET"))
+            ' "$RUNNER_TEMP/eventpass-tasks/ms-$service.json"
+          done
+      - name: Start with empty databases and DynamoDB Local
+        run: |
+          cp .env.example .env
+          docker compose up -d --wait localstack dynamodb
+          docker compose exec -T localstack aws --endpoint-url http://dynamodb:8000 dynamodb create-table --cli-input-json file:///etc/eventpass/tickets-table.json
+          docker compose up -d --build --wait --wait-timeout 240
+          for database in auth events orders; do
+            docker compose exec -T "postgres-$database" sh -c '
+              psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Atc "SELECT version, success FROM flyway_schema_history;" | grep -Fx "1|t"
+            '
+          done
+      - name: Run E2E tests with DynamoDB
+        run: ./ms-auth/mvnw -B -f e2e-tests/pom.xml verify
+      - name: Show deployment-check logs
+        if: failure()
+        run: docker compose logs --tail=100

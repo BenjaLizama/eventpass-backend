@@ -8,14 +8,12 @@ import cl.eventpass.ms_tickets.event.OrderCompletedItem;
 import cl.eventpass.ms_tickets.exception.BusinessRuleException;
 import cl.eventpass.ms_tickets.exception.ResourceNotFoundException;
 import cl.eventpass.ms_tickets.mapper.TicketMapper;
-import cl.eventpass.ms_tickets.repository.TicketRepository;
+import cl.eventpass.ms_tickets.repository.TicketStore;
 import cl.eventpass.ms_tickets.service.TicketService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 
-import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 
@@ -24,7 +22,7 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class TicketServiceImpl implements TicketService {
 
-    private final TicketRepository ticketRepository;
+    private final TicketStore ticketStore;
     private final TicketMapper ticketMapper;
 
     @Override
@@ -35,25 +33,6 @@ public class TicketServiceImpl implements TicketService {
             for (int ticketIndex = 0;
                  ticketIndex < item.quantity();
                  ticketIndex++) {
-
-                boolean alreadyExists =
-                        ticketRepository
-                                .findByOrderItemIdAndTicketIndexAndDeletedAtIsNull(
-                                        item.orderItemId(),
-                                        ticketIndex
-                                )
-                                .isPresent();
-
-                if (alreadyExists) {
-
-                    log.debug(
-                            "Ticket ya existente. orderItemId={}, ticketIndex={}",
-                            item.orderItemId(),
-                            ticketIndex
-                    );
-
-                    continue;
-                }
 
                 TicketDocument ticket =
                         TicketDocument.builder()
@@ -67,35 +46,7 @@ public class TicketServiceImpl implements TicketService {
                                 .status(TicketStatus.ACTIVE)
                                 .build();
 
-                try {
-
-                    ticketRepository.save(ticket);
-
-                    log.debug(
-                            "Ticket generado correctamente. orderId={}, orderItemId={}, ticketIndex={}",
-                            event.orderId(),
-                            item.orderItemId(),
-                            ticketIndex
-                    );
-
-                } catch (DuplicateKeyException exception) {
-
-                    /*
-                     * Otro consumidor pudo haber creado el mismo ticket
-                     * entre el find() y el save().
-                     *
-                     * El índice único de MongoDB garantiza que solamente
-                     * uno de los documentos sea persistido.
-                     *
-                     * En este caso simplemente ignoramos el duplicado,
-                     * haciendo el procesamiento idempotente.
-                     */
-                    log.debug(
-                            "Ticket duplicado detectado. orderItemId={}, ticketIndex={}",
-                            item.orderItemId(),
-                            ticketIndex
-                    );
-                }
+                ticketStore.insertIfAbsent(ticket);
             }
         }
 
@@ -109,7 +60,7 @@ public class TicketServiceImpl implements TicketService {
     public List<TicketResponse> getMyTickets(UUID userId) {
 
         List<TicketDocument> tickets =
-                ticketRepository.findByUserIdAndDeletedAtIsNull(userId);
+                ticketStore.findByUserIdAndDeletedAtIsNull(userId);
 
         return tickets.stream()
                 .map(ticketMapper::toResponse)
@@ -123,7 +74,7 @@ public class TicketServiceImpl implements TicketService {
     ) {
 
         TicketDocument ticket =
-                ticketRepository
+                ticketStore
                         .findByTicketCodeAndDeletedAtIsNull(ticketCode)
                         .orElseThrow(() ->
                                 new ResourceNotFoundException(
@@ -145,14 +96,14 @@ public class TicketServiceImpl implements TicketService {
     public TicketResponse useTicket(String ticketCode) {
 
         TicketDocument updatedTicket =
-                ticketRepository.markAsUsed(ticketCode);
+                ticketStore.markAsUsed(ticketCode);
 
         if (updatedTicket != null) {
             return ticketMapper.toResponse(updatedTicket);
         }
 
         TicketDocument existingTicket =
-                ticketRepository
+                ticketStore
                         .findByTicketCodeAndDeletedAtIsNull(ticketCode)
                         .orElseThrow(() ->
                                 new ResourceNotFoundException(

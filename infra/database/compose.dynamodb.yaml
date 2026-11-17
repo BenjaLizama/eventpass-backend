@@ -1,0 +1,16 @@
+# Complementa compose.verify.yaml para ejecutar Tickets con DynamoDB Local.
+services:
+  dynamodb:
+    image: amazon/dynamodb-local:2.6.1
+    command: ["-jar", "DynamoDBLocal.jar", "-sharedDb", "-inMemory"]
+    networks: [eventpass]
+  ms-tickets:
+    environment:
+      SPRING_PROFILES_ACTIVE: prod,dynamodb
+      TICKETS_DYNAMODB_ENDPOINT: http://dynamodb:8000
+    depends_on:
+      dynamodb:
+        condition: service_started
+  localstack:
+    volumes:
+      - ./infra/database/tickets-table.json:/etc/eventpass/tickets-table.json:ro

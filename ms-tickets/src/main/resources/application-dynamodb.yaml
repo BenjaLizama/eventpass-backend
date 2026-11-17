@@ -1,0 +1,12 @@
+spring:
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.mongodb.autoconfigure.MongoAutoConfiguration
+      - org.springframework.boot.data.mongodb.autoconfigure.DataMongoAutoConfiguration
+      - org.springframework.boot.data.mongodb.autoconfigure.DataMongoRepositoriesAutoConfiguration
+
+app:
+  tickets:
+    dynamodb:
+      table: ${TICKETS_DYNAMODB_TABLE:eventpass-tickets}
+      endpoint: ${TICKETS_DYNAMODB_ENDPOINT:}

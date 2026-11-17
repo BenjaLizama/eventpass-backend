@@ -1,0 +1,43 @@
+# Usar después del Compose principal y su variante privada, con un proyecto nuevo.
+services:
+  ms-auth:
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+    ports:
+      - "127.0.0.1:18081:8081"
+  ms-events:
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      SPRING_CLOUD_AWS_SQS_ENDPOINT: http://localstack:4566
+    ports:
+      - "127.0.0.1:18082:8082"
+  ms-orders:
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      SPRING_CLOUD_AWS_SQS_ENDPOINT: http://localstack:4566
+    ports:
+      - "127.0.0.1:18083:8083"
+  ms-tickets:
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      SPRING_CLOUD_AWS_SQS_ENDPOINT: http://localstack:4566
+    ports:
+      - "127.0.0.1:18084:8084"
+
+volumes:
+  postgres_auth_data:
+    name: !reset null
+  postgres_events_data:
+    name: !reset null
+  postgres_orders_data:
+    name: !reset null
+  mongodb_tickets_data:
+    name: !reset null
+  redis_data:
+    name: !reset null
+  localstack_data:
+    name: !reset null
+
+networks:
+  eventpass:
+    name: !reset null

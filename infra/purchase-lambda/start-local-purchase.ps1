@@ -1,6 +1,10 @@
 #Requires -Version 7.0
 [CmdletBinding()]
-param([switch]$Build)
+param(
+    [switch]$Build,
+    [ValidateRange(20, 43200)][int]$VisibilityTimeout = 120,
+    [ValidateRange(2, 1000)][int]$MaxReceiveCount = 5
+)
 
 $ErrorActionPreference = 'Stop'
 $PSNativeCommandUseErrorActionPreference = $true
@@ -14,6 +18,20 @@ $archive = Join-Path ([IO.Path]::GetTempPath()) "eventpass-$([guid]::NewGuid()).
 function Send-Json($Uri, $Body, [hashtable]$Headers = @{}, $ContentType = 'application/json') {
     Invoke-RestMethod -Method Post -Uri $Uri -Headers $Headers -ContentType $ContentType `
         -Body ($Body | ConvertTo-Json -Depth 8 -Compress) -TimeoutSec 30
+}
+
+function Invoke-Sqs($Operation, $Body) {
+    Send-Json $endpoint $Body @{ 'X-Amz-Target' = "AmazonSQS.$Operation" } 'application/x-amz-json-1.0'
+}
+
+function Get-OrCreateQueue([string]$QueueName) {
+    try {
+        Invoke-Sqs GetQueueUrl @{ QueueName = $QueueName }
+    }
+    catch {
+        if ($_.ErrorDetails.Message -notmatch 'NonExistentQueue|QueueDoesNotExist') { throw }
+        Invoke-Sqs CreateQueue @{ QueueName = $QueueName }
+    }
 }
 
 Push-Location $root
@@ -40,10 +58,23 @@ COMMIT;
     $api = & ./infra/gateway/start-local-gateway.ps1
     $config = docker compose config --format json | ConvertFrom-Json
     $auth = $config.services.'ms-auth'.environment
-    $queue = Send-Json $endpoint @{ QueueName = 'eventpass-purchase-pending'; Attributes = @{ VisibilityTimeout = '120' } } `
-        @{ 'X-Amz-Target' = 'AmazonSQS.CreateQueue' } 'application/x-amz-json-1.0'
-    $attributes = Send-Json $endpoint @{ QueueUrl = $queue.QueueUrl; AttributeNames = @('QueueArn') } `
-        @{ 'X-Amz-Target' = 'AmazonSQS.GetQueueAttributes' } 'application/x-amz-json-1.0'
+    $deadLetter = Get-OrCreateQueue 'eventpass-purchase-errors'
+    $null = Invoke-Sqs SetQueueAttributes @{ QueueUrl = $deadLetter.QueueUrl; Attributes = @{
+        MessageRetentionPeriod = '1209600'
+    } }
+    $deadLetterAttributes = Invoke-Sqs GetQueueAttributes @{
+        QueueUrl = $deadLetter.QueueUrl; AttributeNames = @('QueueArn')
+    }
+    $queue = Get-OrCreateQueue 'eventpass-purchase-pending'
+    $policy = @{
+        deadLetterTargetArn = $deadLetterAttributes.Attributes.QueueArn
+        maxReceiveCount = $MaxReceiveCount
+    } | ConvertTo-Json -Compress
+    $null = Invoke-Sqs SetQueueAttributes @{ QueueUrl = $queue.QueueUrl; Attributes = @{
+        VisibilityTimeout = [string]$VisibilityTimeout
+        RedrivePolicy = $policy
+    } }
+    $attributes = Invoke-Sqs GetQueueAttributes @{ QueueUrl = $queue.QueueUrl; AttributeNames = @('QueueArn') }
     $existing = Invoke-WebRequest "$functions/$name" -SkipHttpErrorCheck
     if ($existing.StatusCode -eq 200) {
         $current = Invoke-RestMethod "${mappings}?FunctionName=$name"
@@ -75,7 +106,7 @@ COMMIT;
         }
         catch { if ($attempt -eq 15) { throw }; Start-Sleep -Seconds 2 }
     }
-    [pscustomobject]@{ Swagger = 'http://127.0.0.1:8090/'; Gateway = $api.Url; EventSource = $mapping.UUID }
+    [pscustomobject]@{ Swagger = 'http://127.0.0.1:8090/'; Gateway = $api.Url; EventSource = $mapping.UUID; DeadLetterQueue = $deadLetter.QueueUrl }
 }
 finally {
     Remove-Item -LiteralPath $archive -ErrorAction SilentlyContinue

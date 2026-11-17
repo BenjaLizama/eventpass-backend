@@ -1,0 +1,51 @@
+{
+  "region": "us-east-1",
+  "executionRoleArn": "arn:aws:iam::123456789012:role/eventpass-ecs-execution",
+  "taskRoles": {
+    "ms-auth": "arn:aws:iam::123456789012:role/eventpass-ms-auth",
+    "ms-events": "arn:aws:iam::123456789012:role/eventpass-ms-events",
+    "ms-orders": "arn:aws:iam::123456789012:role/eventpass-ms-orders",
+    "ms-tickets": "arn:aws:iam::123456789012:role/eventpass-ms-tickets"
+  },
+  "images": {
+    "ms-auth": "123456789012.dkr.ecr.us-east-1.amazonaws.com/eventpass/ms-auth@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "ms-events": "123456789012.dkr.ecr.us-east-1.amazonaws.com/eventpass/ms-events@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "ms-orders": "123456789012.dkr.ecr.us-east-1.amazonaws.com/eventpass/ms-orders@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "ms-tickets": "123456789012.dkr.ecr.us-east-1.amazonaws.com/eventpass/ms-tickets@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  },
+  "logGroups": {
+    "ms-auth": "/ecs/eventpass/ms-auth",
+    "ms-events": "/ecs/eventpass/ms-events",
+    "ms-orders": "/ecs/eventpass/ms-orders",
+    "ms-tickets": "/ecs/eventpass/ms-tickets"
+  },
+  "environment": {
+    "REDIS_HOST": "redis.example.internal",
+    "REDIS_PORT": "6379",
+    "REDIS_SSL": "true",
+    "AUTH_DB_URL": "jdbc:postgresql://aurora.example.internal:5432/eventpass_auth?sslmode=require",
+    "AUTH_DB_USERNAME": "eventpass_auth",
+    "EVENTS_DB_URL": "jdbc:postgresql://aurora.example.internal:5432/eventpass_events?sslmode=require",
+    "EVENTS_DB_USERNAME": "eventpass_events",
+    "ORDERS_DB_URL": "jdbc:postgresql://aurora.example.internal:5432/eventpass_orders?sslmode=require",
+    "ORDERS_DB_USERNAME": "eventpass_orders",
+    "ADMIN_EMAIL": "admin@example.com",
+    "MS_ORDERS_CLIENT_ID": "eventpass-ms-orders",
+    "AUTH_SERVICE_URL": "http://ms-auth.eventpass.internal:8081",
+    "EVENTS_SERVICE_URL": "http://ms-events.eventpass.internal:8082",
+    "EVENT_PUBLISHED_QUEUE": "eventpass-events-published-queue",
+    "EVENT_CANCELLED_QUEUE": "eventpass-events-cancelled-queue",
+    "ORDER_COMPLETED_QUEUE": "eventpass-orders-completed-queue",
+    "APP_ORDERS_PURCHASE_QUEUE": "eventpass-purchase-pending",
+    "TICKETS_DYNAMODB_TABLE": "eventpass-tickets"
+  },
+  "secrets": {
+    "JWT_SECRET": "arn:aws:secretsmanager:us-east-1:123456789012:secret:eventpass/JWT_SECRET",
+    "AUTH_DB_PASSWORD": "arn:aws:secretsmanager:us-east-1:123456789012:secret:eventpass/AUTH_DB_PASSWORD",
+    "EVENTS_DB_PASSWORD": "arn:aws:secretsmanager:us-east-1:123456789012:secret:eventpass/EVENTS_DB_PASSWORD",
+    "ORDERS_DB_PASSWORD": "arn:aws:secretsmanager:us-east-1:123456789012:secret:eventpass/ORDERS_DB_PASSWORD",
+    "ADMIN_PASSWORD": "arn:aws:secretsmanager:us-east-1:123456789012:secret:eventpass/ADMIN_PASSWORD",
+    "MS_ORDERS_CLIENT_SECRET": "arn:aws:secretsmanager:us-east-1:123456789012:secret:eventpass/MS_ORDERS_CLIENT_SECRET",
+    "REDIS_PASSWORD": "arn:aws:secretsmanager:us-east-1:123456789012:secret:eventpass/REDIS_PASSWORD"
+  }
+}

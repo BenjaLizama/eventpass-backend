@@ -2,6 +2,8 @@ server:
   port: ${PORT:8083}
 
 spring:
+  flyway:
+    enabled: true
   datasource:
     url: ${ORDERS_DB_URL}
     username: ${ORDERS_DB_USERNAME}
@@ -18,10 +20,6 @@ spring:
     aws:
       region:
         static: ${AWS_REGION}
-
-      credentials:
-        access-key: ${AWS_ACCESS_KEY_ID}
-        secret-key: ${AWS_SECRET_ACCESS_KEY}
 
 app:
   services:

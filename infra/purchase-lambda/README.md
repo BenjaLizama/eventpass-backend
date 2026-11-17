@@ -21,3 +21,19 @@ $env:AUTH_BASE_URL = $env:EVENTS_BASE_URL = $env:ORDERS_BASE_URL = $env:TICKETS_
 ```
 
 Para explicarlo en video, muestra la respuesta del pago con `PENDING_ISSUANCE` y luego consulta la orden hasta ver su estado final. SQS puede entregar un mensaje más de una vez. Eventos identifica la reserva por ítem, Tickets identifica cada entrada por ítem e índice y Órdenes mantiene el resultado ya registrado.
+
+La misma prueba envía dos pagos concurrentes por una localidad de un solo cupo. Para probar también la recuperación ante una interrupción, agrega `$env:E2E_INTERRUPT_TICKETS = 'true'` antes de ejecutarla. En ese modo, la prueba detiene el contenedor local de Tickets, comprueba que se reservó el cupo y lo vuelve a iniciar. El resultado esperado es un ticket emitido y una devolución simulada.
+
+## Fallo persistente y recuperación
+
+SQS mueve las compras que agotan cinco entregas a `eventpass-purchase-errors`. La cola de errores conserva los mensajes durante 14 días mientras Floci mantiene sus datos. Si la emisión falla, la orden y su reserva quedan pendientes. Una devolución simulada corresponde al rechazo de aforo.
+
+Después de corregir la causa y comprobar que Tickets responde, devuelve los mensajes a la cola de compra:
+
+```powershell
+.\infra\purchase-lambda\recover-local-purchases.ps1 -Confirm
+```
+
+El comando inicia una tarea de SQS que mueve todos los mensajes de esta cola de errores local. El resultado de la compra se comprueba consultando la orden y sus tickets.
+
+Para probar el fallo persistente, usa un entorno local sin compras en curso y una cola de errores vacía. Arranca con `start-local-purchase.ps1 -VisibilityTimeout 25 -MaxReceiveCount 2`, configura las variables de la prueba anterior, activa `E2E_INTERRUPT_TICKETS` y `E2E_PURCHASE_DLQ` con el valor `true` y ejecuta `EventPassPurchaseFlowIT`. La prueba mantiene Tickets detenido hasta encontrar el mensaje en la cola de errores, restaura el servicio y ejecuta la recuperación. Al terminar, vuelve a ejecutar el arranque sin esos parámetros para recuperar la política habitual.

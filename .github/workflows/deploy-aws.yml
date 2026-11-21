@@ -48,10 +48,24 @@ jobs:
           mask-aws-account-id: true
       - name: Check identity, resources and Gateway before publishing
         run: node infra/aws/deploy-lab.mjs --check
+      - name: Provision queues, storage, logs and container repositories
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force .local | Out-Null
+          ./infra/aws/initialize-lab.ps1 -AwsScript ./infra/aws/Invoke-RunnerAws.ps1
+      - name: Configure private network, databases and secrets with CloudFormation
+        shell: pwsh
+        run: |
+          ./infra/aws/start-lab-network.ps1 -Apply -AwsScript ./infra/aws/Invoke-RunnerAws.ps1
+          ./infra/aws/start-lab-data.ps1 -Apply -AwsScript ./infra/aws/Invoke-RunnerAws.ps1
+          ./infra/aws/initialize-lab-data.ps1 -AwsScript ./infra/aws/Invoke-RunnerAws.ps1
       - name: Publish images and update ECS and purchase Lambda
         run: node infra/aws/deploy-lab.mjs
       - name: Prepare authenticated post-deployment checks
         run: node infra/aws/prepare-runner-smoke.mjs
+      - name: Configure CloudWatch dashboard and alarms
+        shell: pwsh
+        run: ./infra/aws/start-lab-monitoring.ps1 -Apply -AwsScript ./infra/aws/Invoke-RunnerAws.ps1
       - name: Verify sessions, roles, purchases and tickets in AWS
         shell: pwsh
         run: |

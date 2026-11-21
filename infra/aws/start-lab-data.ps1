@@ -1,9 +1,8 @@
 #Requires -Version 7.0
 [CmdletBinding()]
-param([switch] $Apply)
+param([switch] $Apply, [string] $AwsScript = (Join-Path $PSScriptRoot 'Invoke-LabAws.ps1'))
 
 $ErrorActionPreference = 'Stop'
-$awsScript = Join-Path $PSScriptRoot 'Invoke-LabAws.ps1'
 function Invoke-DataAws([string[]] $Arguments, [string] $InputFile) {
     $output = & $awsScript -AwsArguments ($Arguments + @('--output', 'json')) -InputFile $InputFile
     if ($output) { $output | ConvertFrom-Json -Depth 60 }

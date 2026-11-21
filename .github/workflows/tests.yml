@@ -345,13 +345,53 @@ jobs:
         if: failure()
         run: docker compose logs --tail=100
 
+  swarm-checks:
+    name: Docker Swarm manager, worker and scaling
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+          cache-dependency-path: e2e-tests/pom.xml
+      - name: Build, deploy and scale four services on two isolated Docker nodes
+        shell: pwsh
+        run: ./infra/swarm/test-swarm.ps1 -KeepRunning
+      - name: Verify purchases and ticket access over Swarm
+        env:
+          AUTH_BASE_URL: http://127.0.0.1:18081
+          EVENTS_BASE_URL: http://127.0.0.1:18082
+          ORDERS_BASE_URL: http://127.0.0.1:18083
+          TICKETS_BASE_URL: http://127.0.0.1:18084
+          E2E_ADMIN_EMAIL: admin@eventpass.cl
+          E2E_ADMIN_PASSWORD: Cambiame123!
+          MS_ORDERS_CLIENT_ID: eventpass-ms-orders
+          MS_ORDERS_CLIENT_SECRET: eventpass-local-demo-secret
+        run: >-
+          ./ms-auth/mvnw -B -f e2e-tests/pom.xml
+          '-Dit.test=PlatformHealthIT,EventPassPurchaseFlowIT,OrderCancellationRestoresCapacityIT,TicketAccessControlIT'
+          verify
+      - name: Save Swarm verification
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: swarm-verification
+          path: .local/swarm/verification.json
+      - name: Stop isolated Swarm nodes
+        if: always()
+        run: docker compose -p eventpass-swarm-lab -f infra/swarm/compose.lab.yaml down
+
   deploy-aws:
     name: Deploy tested develop to Learner Lab
-    needs: [ms-auth-tests, ms-events-tests, ms-orders-tests, ms-tickets-tests, e2e-tests, deployment-checks]
+    needs: [ms-auth-tests, ms-events-tests, ms-orders-tests, ms-tickets-tests, e2e-tests, deployment-checks, swarm-checks]
     if: >-
       always() && !cancelled() && !failure() &&
       github.event_name == 'push' && github.ref == 'refs/heads/develop' &&
       vars.AWS_DEPLOY_ENABLED == 'true' &&
-      needs.e2e-tests.result == 'success' && needs.deployment-checks.result == 'success'
+      needs.e2e-tests.result == 'success' && needs.deployment-checks.result == 'success' &&
+      needs.swarm-checks.result == 'success'
     uses: ./.github/workflows/deploy-aws.yml
     secrets: inherit

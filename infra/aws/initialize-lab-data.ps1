@@ -1,9 +1,8 @@
 #Requires -Version 7.0
 [CmdletBinding()]
-param()
+param([string] $AwsScript = (Join-Path $PSScriptRoot 'Invoke-LabAws.ps1'))
 
 $ErrorActionPreference = 'Stop'
-$awsScript = Join-Path $PSScriptRoot 'Invoke-LabAws.ps1'
 function Invoke-BootstrapAws([string[]] $Arguments, [string] $InputFile) {
     $output = & $awsScript -AwsArguments ($Arguments + @('--output', 'json')) -InputFile $InputFile
     if ($output) { $output | ConvertFrom-Json -Depth 60 }

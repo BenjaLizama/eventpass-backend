@@ -17,8 +17,9 @@ $role = Invoke-AwsJson -Arguments @('iam', 'get-role', '--role-name', 'LabRole')
 if ($role.Role.Arn -ne "arn:aws:iam::${account}:role/LabRole") { throw 'No se pudo confirmar LabRole.' }
 
 $serviceNames = @('ms-auth', 'ms-events', 'ms-orders', 'ms-tickets')
+$repositoryNames = @($serviceNames) + @('purchase-lambda')
 $repositories = Invoke-AwsJson -Arguments @('ecr', 'describe-repositories')
-foreach ($service in $serviceNames) {
+foreach ($service in $repositoryNames) {
     $name = "eventpass/$service"
     if ($name -notin $repositories.repositories.repositoryName) {
         if ($PSCmdlet.ShouldProcess($name, 'Crear repositorio ECR privado e inmutable')) {
@@ -101,7 +102,7 @@ if (-not $cluster -and $PSCmdlet.ShouldProcess('eventpass', 'Crear clúster ECS 
 # Inventory has no credentials and is kept outside Git to reflect this lab session.
 $inventory = [ordered]@{
     AccountId = $account; Region = $region; TaskRoleArn = $role.Role.Arn
-    ClusterArn = $cluster.clusterArn; Repositories = @($serviceNames | ForEach-Object {
+    ClusterArn = $cluster.clusterArn; Repositories = @($repositoryNames | ForEach-Object {
         "${account}.dkr.ecr.${region}.amazonaws.com/eventpass/$_"
     }); Queues = $queueUrls; TicketsTable = 'eventpass-tickets'
 }

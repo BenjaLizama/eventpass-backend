@@ -77,7 +77,7 @@ try {
     & "$tempRoot/infra/aws/initialize-lab.ps1" -AwsScript $fakeScript -WhatIf | Out-Null
     Assert-True (-not ($labCalls | Where-Object { $_ -match 'create|set-|put-' })) 'WhatIf no debe escribir en AWS.'
     & "$tempRoot/infra/aws/initialize-lab.ps1" -AwsScript $fakeScript | Out-Null
-    Assert-True ($labRepos.Count -eq 4 -and $labQueues.Count -eq 5 -and $labLogs.Count -eq 4 -and $labTable -and $labCluster) 'Faltan recursos de base.'
+    Assert-True ($labRepos.Count -eq 5 -and 'eventpass/purchase-lambda' -in $labRepos -and $labQueues.Count -eq 5 -and $labLogs.Count -eq 4 -and $labTable -and $labCluster) 'Faltan recursos de base, incluido el repositorio Docker de Lambda.'
     $global:labCalls.Clear()
     & "$tempRoot/infra/aws/initialize-lab.ps1" -AwsScript $fakeScript | Out-Null
     Assert-True (-not ($labCalls | Where-Object { $_ -match 'create-' })) 'Repetir no debe duplicar recursos.'

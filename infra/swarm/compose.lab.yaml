@@ -1,0 +1,43 @@
+# Dos motores Docker de laboratorio; no montan el socket del Docker del PC.
+# Los privilegios son necesarios para las redes y contenedores de Docker-in-Docker.
+services:
+  manager:
+    image: docker:29.0.4-dind
+    privileged: true
+    hostname: manager
+    networks:
+      default:
+        ipv4_address: 172.30.250.10
+    environment:
+      DOCKER_TLS_CERTDIR: ""
+    command: ["dockerd", "--host=unix:///var/run/docker.sock"]
+    ports:
+      - "127.0.0.1:18081:18081"
+      - "127.0.0.1:18082:18082"
+      - "127.0.0.1:18083:18083"
+      - "127.0.0.1:18084:18084"
+    volumes:
+      - manager_data:/var/lib/docker
+      - .:/workspace:ro
+      - ../../.local/swarm:/images:ro
+  worker:
+    image: docker:29.0.4-dind
+    privileged: true
+    hostname: worker
+    networks:
+      default:
+        ipv4_address: 172.30.250.11
+    environment:
+      DOCKER_TLS_CERTDIR: ""
+    command: ["dockerd", "--host=unix:///var/run/docker.sock"]
+    volumes:
+      - worker_data:/var/lib/docker
+      - ../../.local/swarm:/images:ro
+volumes:
+  manager_data:
+  worker_data:
+networks:
+  default:
+    ipam:
+      config:
+        - subnet: 172.30.250.0/24

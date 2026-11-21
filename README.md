@@ -14,47 +14,44 @@ La [guía de Swagger y API Gateway](infra/gateway/README.md) muestra cómo proba
 
 ---
 
+## Entrega EP3
+
+Spring Boot sigue siendo el backend, Docker construye las imágenes, Floci simula las integraciones y AWS ejecuta los recursos reales. La evaluación exige además Docker Swarm: ECS del diagrama autorizado no sustituye esa evidencia.
+
+| Evidencia | Archivos y ejecución |
+| --- | --- |
+| Dockerfiles y endpoints locales (IE1, IE2) | Dockerfiles de cada servicio; `docker compose up -d --build`. |
+| Manager, worker, despliegue y escalado (IE3, IE7, IE8, IE9) | [Práctica Swarm](infra/swarm/README.md): `./infra/swarm/test-swarm.ps1 -KeepRunning`. |
+| Build, test, configuración cloud y despliegue (IE4, IE5, IE6) | `.github/workflows/tests.yml` y `deploy-aws.yml`; [publicación AWS](infra/aws/README.md). |
+| Función, cola, Gateway y flujo completo (IE10–IE15) | [Procesador de compras](infra/purchase-lambda/README.md), [Swagger común](infra/gateway/README.md) y `test-lab-purchase.ps1` en AWS. |
+| Presentación (IE16, IE17) | Video de 3–8 minutos, con voz de ambos estudiantes y demostraciones reales. |
+
+El pipeline también prueba Swarm y compras con dos nodos Docker aislados. Publicar en AWS requiere laboratorio encendido, credenciales vigentes y `AWS_DEPLOY_ENABLED=true`. Tener el workflow no acredita una ejecución cloud: hay que mostrar su resultado y los servicios después del despliegue. Floci es una prueba previa. JWT se valida en Spring Boot; el authorizer nativo de Gateway sigue pendiente.
+
+Los `.ps1` reúnen comandos PowerShell de Docker/AWS. Los `.mjs` contienen JavaScript ejecutado por Node.js para generar configuraciones o coordinar operaciones; `.test.mjs` son pruebas. `data-bootstrap` es un contenedor temporal para crear/verificar bases y usuarios dentro de la red privada, no otro microservicio permanente; Flyway crea las tablas de negocio. Las guías incluyen scripts y CloudFormation; IE5 permite scripts, comandos o infraestructura como código. Las extensiones elegidas no son un requisito de AWS. La Lambda actual usa Node.js: la rúbrica pide una función funcional, sin fijar lenguaje; los cuatro microservicios siguen en Java.
+
 ## 🏛️ Arquitectura
 
 EventPass está compuesto por cuatro microservicios independientes:
 
 ```text
-                         ┌──────────────────┐
-                         │     Cliente      │
-                         └────────┬─────────┘
-                                  │
-                     ┌────────────┴────────────┐
-                     │                         │
-                     ▼                         ▼
-              ┌─────────────┐          ┌─────────────┐
-              │   ms-auth   │          │  ms-events  │
-              │    :8081    │          │    :8082    │
-              └──────┬──────┘          └──────┬──────┘
-                     │                        │
-                     ▼                        ▼
-               PostgreSQL                PostgreSQL
-                auth DB                 events DB
+Cliente / Swagger
+        |
+  API Gateway
+        |
+  Balanceador privado (AWS)
+        |
+  Auth / Eventos / Ordenes / Tickets (Spring Boot)
+                       |
+                SQS: compra pendiente
+                       |
+                Lambda: procesar compra
+                       |
+                Reservar aforo y emitir ticket
 
-
-                     ┌─────────────┐
-                     │  ms-orders  │
-                     │    :8083    │
-                     └──────┬──────┘
-                            │
-                            │ OrderCompletedEvent
-                            ▼
-                     ┌─────────────┐
-                     │     SQS     │
-                     └──────┬──────┘
-                            │
-                            ▼
-                     ┌─────────────┐
-                     │ ms-tickets  │
-                     │    :8084    │
-                     └──────┬──────┘
-                            │
-                            ▼
-                         MongoDB
+Datos AWS: Aurora (Auth/Eventos/Ordenes), DynamoDB (Tickets), Redis (sesiones).
+Datos locales de Compose/Swarm: PostgreSQL, MongoDB y Redis.
+Floci simula Gateway/SQS/Lambda; no representa un despliegue real en AWS.
 ```
 
 ### Principios principales

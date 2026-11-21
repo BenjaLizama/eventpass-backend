@@ -1,8 +1,7 @@
 #Requires -Version 7.0
 [CmdletBinding()]
-param([switch] $Apply)
+param([switch] $Apply, [string] $AwsScript = (Join-Path $PSScriptRoot 'Invoke-LabAws.ps1'))
 $ErrorActionPreference = 'Stop'
-$awsScript = Join-Path $PSScriptRoot 'Invoke-LabAws.ps1'
 $local = Join-Path $PSScriptRoot '../../.local'
 $stackName = 'eventpass-monitoring'
 function Invoke-MonitoringAws([string[]] $Arguments, [string] $InputFile) {

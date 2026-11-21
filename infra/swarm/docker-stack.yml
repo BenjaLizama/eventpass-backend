@@ -1,0 +1,143 @@
+version: '3.8'
+
+# No contiene build ni depends_on: Swarm recibe imágenes ya construidas.
+# env_file se lee explícitamente; docker stack deploy no carga .env por sí solo.
+x-app: &app
+  env_file: .env
+  networks: [eventpass]
+  deploy: &app-deploy
+    replicas: 1
+    placement:
+      constraints: [node.role == worker]
+    restart_policy:
+      condition: any
+      delay: 10s
+    update_config:
+      parallelism: 1
+      order: start-first
+      failure_action: rollback
+      monitor: 45s
+    resources:
+      limits:
+        memory: 512M
+  healthcheck: &app-health
+    interval: 10s
+    timeout: 5s
+    retries: 12
+    start_period: 60s
+
+x-data: &data
+  networks: [eventpass]
+  deploy:
+    replicas: 1
+    placement:
+      constraints: [node.labels.eventpass-data == true]
+    restart_policy:
+      condition: any
+      delay: 5s
+
+services:
+  postgres-auth:
+    <<: *data
+    image: postgres:16-alpine
+    env_file: .env
+    environment:
+      POSTGRES_DB: eventpass_auth
+    volumes: [auth_data:/var/lib/postgresql/data]
+  postgres-events:
+    <<: *data
+    image: postgres:16-alpine
+    env_file: .env
+    environment:
+      POSTGRES_DB: eventpass_events
+    volumes: [events_data:/var/lib/postgresql/data]
+  postgres-orders:
+    <<: *data
+    image: postgres:16-alpine
+    env_file: .env
+    environment:
+      POSTGRES_DB: eventpass_orders
+    volumes: [orders_data:/var/lib/postgresql/data]
+  mongodb-tickets:
+    <<: *data
+    image: mongo:7
+    volumes: [tickets_data:/data/db]
+  redis:
+    <<: *data
+    image: redis:7-alpine
+    command: [redis-server, --appendonly, 'yes']
+    volumes: [redis_data:/data]
+  floci:
+    <<: *data
+    image: floci/floci:2.4.0
+    environment:
+      FLOCI_HOSTNAME: floci
+  init-queues:
+    image: public.ecr.aws/aws-cli/aws-cli:2.41.1
+    environment:
+      AWS_ACCESS_KEY_ID: test
+      AWS_SECRET_ACCESS_KEY: test
+      AWS_DEFAULT_REGION: us-east-1
+    entrypoint: [/bin/sh, /init-queues.sh]
+    configs:
+      - source: init_queues
+        target: /init-queues.sh
+    networks: [eventpass]
+    deploy:
+      restart_policy:
+        condition: on-failure
+        max_attempts: 3
+  ms-auth:
+    <<: *app
+    image: eventpass/ms-auth:ep3
+    environment:
+      AUTH_DB_URL: jdbc:postgresql://postgres-auth:5432/eventpass_auth
+    ports: ['18081:8081']
+    healthcheck:
+      <<: *app-health
+      test: [CMD, wget, --spider, -q, 'http://localhost:8081/actuator/health']
+  ms-events:
+    <<: *app
+    image: eventpass/ms-events:ep3
+    environment:
+      EVENTS_DB_URL: jdbc:postgresql://postgres-events:5432/eventpass_events
+    ports: ['18082:8082']
+    healthcheck:
+      <<: *app-health
+      test: [CMD, wget, --spider, -q, 'http://localhost:8082/actuator/health']
+  ms-orders:
+    <<: *app
+    image: eventpass/ms-orders:ep3
+    environment:
+      ORDERS_DB_URL: jdbc:postgresql://postgres-orders:5432/eventpass_orders
+      AUTH_SERVICE_URL: http://ms-auth:8081
+      EVENTS_SERVICE_URL: http://ms-events:8082
+      APP_ORDERS_ASYNC_PURCHASE: 'false'
+    ports: ['18083:8083']
+    healthcheck:
+      <<: *app-health
+      test: [CMD, wget, --spider, -q, 'http://localhost:8083/actuator/health']
+  ms-tickets:
+    <<: *app
+    image: eventpass/ms-tickets:ep3
+    environment:
+      TICKETS_MONGODB_URI: mongodb://mongodb-tickets:27017/eventpass_tickets
+      ORDER_COMPLETED_QUEUE: eventpass-orders-completed-queue
+    ports: ['18084:8084']
+    healthcheck:
+      <<: *app-health
+      test: [CMD, wget, --spider, -q, 'http://localhost:8084/actuator/health']
+
+networks:
+  eventpass:
+    driver: overlay
+    attachable: true
+volumes:
+  auth_data:
+  events_data:
+  orders_data:
+  tickets_data:
+  redis_data:
+configs:
+  init_queues:
+    file: ./init-queues.sh

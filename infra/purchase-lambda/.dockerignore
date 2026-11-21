@@ -1,0 +1,7 @@
+*
+!Dockerfile
+!.dockerignore
+!index.mjs
+!process-order.mjs
+!package.json
+!package-lock.json

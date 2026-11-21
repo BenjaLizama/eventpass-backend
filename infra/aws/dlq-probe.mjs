@@ -33,4 +33,9 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
   copyFileSync(join(here, '../purchase-lambda/index.mjs'), join(directory, 'purchase-handler.mjs'));
   copyFileSync(join(here, '../purchase-lambda/process-order.mjs'), join(directory, 'process-order.mjs'));
   writeFileSync(join(directory, 'dlq-probe.mjs'), readFileSync(fileURLToPath(import.meta.url)));
+  const source = join(here, '../purchase-lambda');
+  writeFileSync(join(directory, 'Dockerfile'), readFileSync(join(source, 'Dockerfile'), 'utf8')
+    .replace('COPY index.mjs process-order.mjs', 'COPY *.mjs'));
+  for (const name of ['package.json', 'package-lock.json']) copyFileSync(join(source, name), join(directory, name));
+  writeFileSync(join(directory, '.dockerignore'), '*\n!Dockerfile\n!*.mjs\n!package.json\n!package-lock.json\n');
 }

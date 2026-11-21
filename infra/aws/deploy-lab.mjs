@@ -21,6 +21,7 @@ export function validateConfig(config, tasks, revision) {
   if (config.region !== tasks.region) throw new Error('Las regiones de despliegue y tareas difieren.');
   required(config.cluster, 'cluster', /^[\w-]+$/);
   required(config.purchaseFunction, 'purchaseFunction', /^[\w-]+$/);
+  required(config.purchaseRepository, 'purchaseRepository', /^[a-z0-9]+(?:[._/-][a-z0-9]+)*$/);
   const url = new URL(required(config.gatewayUrl, 'gatewayUrl'));
   if (url.protocol !== 'https:' || url.username || url.password || url.search || url.hash ||
       !url.hostname.endsWith(`.execute-api.${config.region}.amazonaws.com`)) {
@@ -33,6 +34,9 @@ export function validateConfig(config, tasks, revision) {
   if (new Set(Object.values(config.services)).size !== services.length ||
       new Set(Object.values(config.repositories)).size !== services.length) {
     throw new Error('Cada microservicio requiere su propio servicio ECS y repositorio ECR.');
+  }
+  if (Object.values(config.repositories).includes(config.purchaseRepository)) {
+    throw new Error('Lambda requiere su propio repositorio ECR.');
   }
   const arns = [tasks.executionRoleArn, ...services.map(s => tasks.taskRoles?.[s]),
     ...Object.values(tasks.secrets ?? {})];
@@ -55,8 +59,8 @@ export async function deploy(config, taskConfig, revision, run, checkOnly = fals
     const identity = aws('sts', 'get-caller-identity');
     if (identity.Account !== config.accountId) throw new Error('La identidad AWS pertenece a otra cuenta.');
     const repositories = aws('ecr', 'describe-repositories', '--repository-names',
-      ...services.map(s => config.repositories[s]));
-    if (repositories.repositories?.length !== services.length) throw new Error('Faltan repositorios ECR.');
+      ...services.map(s => config.repositories[s]), config.purchaseRepository);
+    if (repositories.repositories?.length !== services.length + 1) throw new Error('Faltan repositorios ECR.');
     const current = aws('ecs', 'describe-services', '--cluster', config.cluster, '--services',
       ...services.map(s => config.services[s]));
     if (current.failures?.length || current.services?.length !== services.length) throw new Error('Faltan servicios ECS.');
@@ -69,7 +73,7 @@ export async function deploy(config, taskConfig, revision, run, checkOnly = fals
       }
     }
     const fn = aws('lambda', 'get-function-configuration', '--function-name', config.purchaseFunction);
-    if (fn.State !== 'Active' || fn.Runtime !== 'nodejs22.x' || fn.Handler !== 'index.handler' ||
+    if (fn.State !== 'Active' || fn.PackageType !== 'Image' ||
         fn.LastUpdateStatus === 'InProgress') throw new Error('Lambda no está preparada para actualizar su código.');
     const mappings = aws('lambda', 'list-event-source-mappings', '--function-name', config.purchaseFunction);
     if (!mappings.EventSourceMappings?.some(m => m.State === 'Enabled' && m.BatchSize === 1 &&
@@ -102,6 +106,12 @@ export async function deploy(config, taskConfig, revision, run, checkOnly = fals
       required(digest, service + ' digest', /^sha256:[a-f0-9]{64}$/);
       images[service] = `${registry}/${config.repositories[service]}@${digest}`;
     }
+    const purchaseTag = `${registry}/${config.purchaseRepository}:${imageTag}`;
+    run('docker', ['build', '--platform', 'linux/amd64', '--provenance=false', '-t', purchaseTag, 'infra/purchase-lambda']);
+    run('docker', ['push', purchaseTag]);
+    const purchaseInfo = aws('ecr', 'describe-images', '--repository-name', config.purchaseRepository, '--image-ids', `imageTag=${imageTag}`);
+    const purchaseDigest = required(purchaseInfo.imageDetails?.[0]?.imageDigest, 'purchase digest', /^sha256:[a-f0-9]{64}$/);
+    const purchaseImage = `${registry}/${config.purchaseRepository}@${purchaseDigest}`;
     writeFileSync(configFile, JSON.stringify({ ...taskConfig, images }));
     run(process.execPath, ['infra/aws/render-task-definitions.mjs', configFile, workspace]);
     assertLatest();
@@ -110,11 +120,9 @@ export async function deploy(config, taskConfig, revision, run, checkOnly = fals
       const result = aws('ecs', 'register-task-definition', '--cli-input-json', `file://${join(workspace, service + '.json')}`);
       definitions[service] = result.taskDefinition.taskDefinitionArn;
     }
-    const zip = join(workspace, 'purchase.zip');
-    run('zip', ['-j', zip, 'infra/purchase-lambda/index.mjs', 'infra/purchase-lambda/process-order.mjs']);
     // Keep function environment, VPC, permissions and SQS mapping unchanged.
     aws('lambda', 'update-function-code', '--function-name', config.purchaseFunction,
-      '--revision-id', fn.RevisionId, '--zip-file', `fileb://${zip}`);
+      '--revision-id', fn.RevisionId, '--image-uri', purchaseImage);
     aws('lambda', 'wait', 'function-updated-v2', '--function-name', config.purchaseFunction);
     for (const service of services) {
       aws('ecs', 'update-service', '--cluster', config.cluster, '--service', config.services[service],
@@ -124,7 +132,7 @@ export async function deploy(config, taskConfig, revision, run, checkOnly = fals
       '--services', ...services.map(s => config.services[s])),
     Object.fromEntries(services.map(s => [config.services[s], definitions[s]])), waitOptions);
     await smoke(config.gatewayUrl);
-    return { revision, images, definitions };
+    return { revision, images, definitions, purchaseImage };
   } finally {
     rmSync(workspace, { recursive: true, force: true });
   }

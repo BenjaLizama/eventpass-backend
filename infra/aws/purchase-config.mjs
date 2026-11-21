@@ -29,7 +29,7 @@ export function buildPurchaseConfig(networkOutputs, dataOutputs, queueAttributes
     variables[name.toUpperCase() + '_SERVICE_URL'] = url.href.replace(/\/$/, '');
   }
   return {
-    FunctionName: 'eventpass-process-purchase', Runtime: 'nodejs22.x', Handler: 'index.handler',
+    FunctionName: 'eventpass-process-purchase-image', PackageType: 'Image',
     Role: `arn:aws:iam::${account}:role/LabRole`, Timeout: 20, MemorySize: 256,
     Architectures: ['x86_64'],
     VpcConfig: { SubnetIds: [ids.AppA, ids.AppB], SecurityGroupIds: [ids.PurchaseSecurityGroup] },

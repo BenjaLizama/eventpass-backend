@@ -13,7 +13,9 @@ const attributes = { QueueArn: 'arn:aws:sqs:us-east-1:119065066402:eventpass-pur
 test('Lambda uses private app subnets, LabRole, a secret reference and compatible SQS visibility', () => {
   const config = buildPurchaseConfig(outputs, [], attributes);
   assert.equal(config.Timeout * 6, Number(attributes.VisibilityTimeout));
-  assert.equal(config.Runtime, 'nodejs22.x');
+  assert.equal(config.PackageType, 'Image');
+  assert.equal(config.Runtime, undefined);
+  assert.equal(config.Handler, undefined);
   assert.deepEqual(config.VpcConfig.SubnetIds, ['subnet-a', 'subnet-b']);
   assert.equal(config.VpcConfig.SecurityGroupIds[0], 'sg-purchase');
   assert.equal(config.Environment.Variables.MS_ORDERS_CLIENT_SECRET, undefined);

@@ -5,31 +5,27 @@ $ErrorActionPreference = 'Stop'
 $local = Join-Path $PSScriptRoot '../../.local'
 $awsScript = Join-Path $PSScriptRoot 'Invoke-LabAws.ps1'
 $stateFile = Join-Path $local 'aws-dlq-test-state.json'
-$baselineArchive = Join-Path $local 'purchase-dlq-original.zip'
-$name = 'eventpass-process-purchase'
+$name = 'eventpass-process-purchase-image'
 function Invoke-DlqAws([string[]] $Arguments, [string] $InputFile) {
     $value = & $awsScript -AwsArguments ($Arguments + @('--output','json')) -InputFile $InputFile
     if ($value) { $value | ConvertFrom-Json -Depth 50 }
-}
-function Get-CodeHash([string] $Path) {
-    [Convert]::ToBase64String([Security.Cryptography.SHA256]::HashData([IO.File]::ReadAllBytes($Path)))
 }
 function Save-DlqState($State) { $State | ConvertTo-Json -Depth 15 | Set-Content -LiteralPath $stateFile }
 function Restore-PurchaseCode {
     $state = Get-Content -Raw -LiteralPath $stateFile | ConvertFrom-Json
     if (-not $state.RestoreNeeded) { return }
-    if ((Get-CodeHash $baselineArchive) -ne $state.BaselineHash) { throw 'El ZIP de restauración no coincide con el original.' }
-    $current = Invoke-DlqAws -Arguments @('lambda','get-function-configuration','--function-name',$name)
-    if ($current.CodeSha256 -eq $state.BaselineHash) { $state.RestoreNeeded = $false; Save-DlqState $state; return }
-    if ($current.CodeSha256 -ne $state.ProbeHash) { throw 'Lambda cambió fuera de la prueba. No se sobrescribirá esa versión; revisar y restaurar de forma coordinada.' }
-    Invoke-DlqAws -Arguments @('lambda','update-function-code','--function-name',$name,'--revision-id',$current.RevisionId,
-        '--zip-file','fileb:///input/request.json') -InputFile $baselineArchive | Out-Null
+    if ($state.BaselineImage -notmatch '^119065066402\.dkr\.ecr\.us-east-1\.amazonaws\.com/eventpass/purchase-lambda@sha256:[a-f0-9]{64}$') { throw 'Imagen de restauración inválida.' }
+    $current = Invoke-DlqAws -Arguments @('lambda','get-function','--function-name',$name)
+    if ($current.Code.ResolvedImageUri -eq $state.BaselineImage) { $state.RestoreNeeded = $false; Save-DlqState $state; return }
+    if ($current.Code.ResolvedImageUri -ne $state.ProbeImage) { throw 'Lambda cambió fuera de la prueba. No se sobrescribirá esa versión; revisar y restaurar de forma coordinada.' }
+    Invoke-DlqAws -Arguments @('lambda','update-function-code','--function-name',$name,'--revision-id',$current.Configuration.RevisionId,
+        '--image-uri',$state.BaselineImage) | Out-Null
     Invoke-DlqAws -Arguments @('lambda','wait','function-updated-v2','--function-name',$name) | Out-Null
-    $restored = Invoke-DlqAws -Arguments @('lambda','get-function-configuration','--function-name',$name)
-    if ($restored.State -ne 'Active' -or $restored.LastUpdateStatus -ne 'Successful' -or $restored.CodeSha256 -ne $state.BaselineHash) { throw 'No se pudo verificar la restauración de Lambda.' }
+    $restored = Invoke-DlqAws -Arguments @('lambda','get-function','--function-name',$name)
+    if ($restored.Configuration.State -ne 'Active' -or $restored.Configuration.LastUpdateStatus -ne 'Successful' -or $restored.Code.ResolvedImageUri -ne $state.BaselineImage) { throw 'No se pudo verificar la restauración de Lambda.' }
     $state.RestoreNeeded = $false
     Save-DlqState $state
-    Write-Host 'Código normal de Lambda restaurado y verificado por SHA-256.'
+    Write-Host 'Imagen normal de Lambda restaurada y verificada por digest SHA-256.'
 }
 $identity = Invoke-DlqAws -Arguments @('sts','get-caller-identity')
 if ($identity.Account -ne '119065066402') { throw 'Cuenta incorrecta.' }
@@ -38,13 +34,13 @@ if (Test-Path -LiteralPath $stateFile) {
     $previous = Get-Content -Raw -LiteralPath $stateFile | ConvertFrom-Json
     if ($previous.RestoreNeeded) { throw 'Hay una prueba sin restaurar. Ejecuta este script con -Restore antes de continuar.' }
 }
-$current = Invoke-DlqAws -Arguments @('lambda','get-function-configuration','--function-name',$name)
-if ($current.State -ne 'Active' -or $current.LastUpdateStatus -ne 'Successful') { throw 'Lambda no está estable.' }
-$original = Join-Path $local 'purchase.zip'
-if ((Get-CodeHash $original) -ne $current.CodeSha256) { throw 'El ZIP local no coincide con el código activo. No se modificará Lambda.' }
+$current = Invoke-DlqAws -Arguments @('lambda','get-function','--function-name',$name)
+if ($current.Configuration.State -ne 'Active' -or $current.Configuration.LastUpdateStatus -ne 'Successful' -or $current.Configuration.PackageType -ne 'Image') { throw 'Lambda no está estable como imagen.' }
+$original = $current.Code.ResolvedImageUri
+if ($original -notmatch '^119065066402\.dkr\.ecr\.us-east-1\.amazonaws\.com/eventpass/purchase-lambda@sha256:[a-f0-9]{64}$') { throw 'Lambda no usa un digest ECR de la cuenta autorizada.' }
 $deployment = Get-Content -Raw -LiteralPath (Join-Path $local 'aws-purchase-deployment.json') | ConvertFrom-Json
 $mapping = Invoke-DlqAws -Arguments @('lambda','get-event-source-mapping','--uuid',$deployment.MappingId)
-if ($mapping.State -ne 'Enabled' -or $mapping.BatchSize -ne 1 -or $mapping.FunctionArn -ne $current.FunctionArn) { throw 'El vínculo SQS no coincide con el despliegue esperado.' }
+if ($mapping.State -ne 'Enabled' -or $mapping.BatchSize -ne 1 -or $mapping.FunctionArn -ne $current.Configuration.FunctionArn) { throw 'El vínculo SQS no coincide con el despliegue esperado.' }
 $queue = Invoke-DlqAws -Arguments @('sqs','get-queue-attributes','--queue-url',$deployment.QueueUrl,'--attribute-names','All')
 $policy = $queue.Attributes.RedrivePolicy | ConvertFrom-Json
 if ($policy.maxReceiveCount -ne 5 -or $queue.Attributes.VisibilityTimeout -ne '120' -or
@@ -92,15 +88,12 @@ try {
     $directory = Join-Path $local 'dlq-probe-package'
     & node (Join-Path $PSScriptRoot 'dlq-probe.mjs') $order.id $directory
     if ($LASTEXITCODE -ne 0) { throw 'No se pudo preparar el fallo aislado.' }
-    $probeArchive = Join-Path $local 'purchase-dlq-probe.zip'
-    Compress-Archive -LiteralPath @((Join-Path $directory 'index.mjs'), (Join-Path $directory 'purchase-handler.mjs'),
-        (Join-Path $directory 'process-order.mjs'), (Join-Path $directory 'dlq-probe.mjs')) -DestinationPath $probeArchive -Force
-    Copy-Item -LiteralPath $original -Destination $baselineArchive -Force
-    $state = @{ RestoreNeeded = $true; BaselineHash = $current.CodeSha256; ProbeHash = Get-CodeHash $probeArchive;
+    $probe = & (Join-Path $PSScriptRoot 'Publish-LabPurchaseImage.ps1') -ContextPath $directory -TagPrefix 'dlq-probe'
+    $state = @{ RestoreNeeded = $true; BaselineImage = $original; ProbeImage = $probe.ImageUri;
         OrderId = $order.id; EventId = $eventId; StartedAt = [DateTimeOffset]::UtcNow.ToString('o') }
     Save-DlqState $state
-    Invoke-DlqAws -Arguments @('lambda','update-function-code','--function-name',$name,'--revision-id',$current.RevisionId,
-        '--zip-file','fileb:///input/request.json') -InputFile $probeArchive | Out-Null
+    Invoke-DlqAws -Arguments @('lambda','update-function-code','--function-name',$name,'--revision-id',$current.Configuration.RevisionId,
+        '--image-uri',$probe.ImageUri) | Out-Null
     Invoke-DlqAws -Arguments @('lambda','wait','function-updated-v2','--function-name',$name) | Out-Null
     $paid = Invoke-DlqProbe 'POST' "/api/v1/orders/$($order.id)/payment" 200 @{ paymentMethod = 'CARD' } $customerToken
     Assert-Dlq ($paid.status -eq 'PENDING_ISSUANCE' -and $paid.paymentStatus -eq 'APPROVED') 'El pago simulado no quedó pendiente de emisión.'
@@ -153,7 +146,7 @@ try {
     $completed = $true
     @{ OrderId = $order.id; EventId = $eventId; FaultLogCount = $logCount; RedriveAttempts = 5; VisibilityTimeout = 120;
         FoundInDeadLetterQueue = $true; Recovered = $true; Tickets = $tickets.Count; AvailableCapacity = $category.availableCapacity;
-        BaselineHash = $state.BaselineHash; Checks = $checks } | ConvertTo-Json -Depth 12 |
+        BaselineImage = $state.BaselineImage; Checks = $checks } | ConvertTo-Json -Depth 12 |
         Set-Content -LiteralPath (Join-Path $local 'aws-dlq-smoke.json')
     Write-Host 'OK: cinco intentos, DLQ real, restauración del código, recuperación de la orden y un solo ticket con un solo cupo reservado.'
 } finally {

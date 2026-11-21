@@ -1,0 +1,14 @@
+target/
+.git/
+.aws/
+.local/
+.env
+.env.*
+**/.env
+**/.env.*
+.idea/
+.vscode/
+*.iml
+*.log
+.DS_Store
+Thumbs.db

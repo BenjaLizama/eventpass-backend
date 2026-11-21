@@ -1,0 +1,9 @@
+{
+  "name": "eventpass-purchase-lambda",
+  "private": true,
+  "type": "module",
+  "engines": { "node": ">=22" },
+  "dependencies": {
+    "@aws-sdk/client-secrets-manager": "3.1175.0"
+  }
+}

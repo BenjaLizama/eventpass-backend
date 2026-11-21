@@ -4,6 +4,10 @@ Auth, Eventos, Órdenes y Tickets siguen siendo aplicaciones Spring Boot. Maven 
 
 ## Preparar las imágenes y tareas
 
+El despliegue de los cuatro microservicios usa sus Dockerfiles multietapa: Maven compila dentro de Docker y la etapa final incorpora Java 21 JRE y el JAR. Los contenedores ejecutan el proceso como `spring`, UID/GID 10001. Cada contexto tiene un `.dockerignore` que excluye compilados locales, archivos de entorno, credenciales y archivos del editor. Los secretos se entregan al arrancar el contenedor.
+
+Docker construye y publica las imágenes; ECR las almacena y ECS/Fargate ejecuta los cuatro microservicios. La guía del curso presenta ECS/Fargate como alternativa a EC2 con Docker Swarm, y el diagrama autorizado utiliza ECS. El procesador Lambda también se construye con un Dockerfile y usa su propia imagen en ECR. GitHub Actions comprueba el usuario efectivo de los cuatro servicios, prueba la imagen de Lambda con archivos de solo lectura y ejecuta las pruebas funcionales con DynamoDB.
+
 1. Construye las cuatro imágenes con sus Dockerfile para Linux x86-64. Sube cada imagen a un repositorio ECR autorizado y anota su digest `sha256`. Usa ese digest para que cada tarea arranque con una versión concreta.
 2. Completa una copia de `task-config.example.json` con los ARNs de roles, referencias a secretos, grupos de CloudWatch Logs, imágenes ECR y direcciones privadas. El archivo de ejemplo usa dominios y ARNs ficticios. El rol de ejecución se usa al descargar imágenes, preparar logs y obtener secretos de arranque. El rol de tarea autoriza las llamadas de la aplicación, como SQS para Órdenes y DynamoDB para Tickets.
 3. Genera los cuatro JSON de ECS con Node.js. El comando solo escribe archivos.
@@ -18,7 +22,7 @@ Cada tarea usa Fargate, red `awsvpc`, 512 unidades de CPU y 1 GiB de memoria com
 
 1. Prepara bases Aurora PostgreSQL, DynamoDB, Redis privado, colas SQS y la cola de errores. Crea también las colas de publicación y cancelación de Eventos y la cola de compatibilidad que escucha Tickets. Usa las referencias de entorno incluidas en la configuración.
 2. Ejecuta un servicio ECS por microservicio en subredes privadas con IP pública deshabilitada. Configura descubrimiento privado para las URL de servicio del ejemplo, o reemplázalas por las URL privadas que admita la sala. Lambda necesita acceso privado a Auth, Eventos, Órdenes y Tickets.
-3. Empaqueta `index.mjs` y `process-order.mjs` de `infra/purchase-lambda` en la raíz de un ZIP. Configura en Lambda `AUTH_SERVICE_URL`, `EVENTS_SERVICE_URL`, `ORDERS_SERVICE_URL`, `TICKETS_SERVICE_URL` y las credenciales del cliente interno usadas por Auth. Vincula la cola de compras pendientes mediante un event source mapping. Valida acceso a la VPC y permisos de SQS y CloudWatch.
+3. Construye `infra/purchase-lambda/Dockerfile` y publica su imagen en `eventpass/purchase-lambda` con `Publish-LabPurchaseImage.ps1`. Configura Lambda con `PackageType=Image` y la URI ECR fijada por digest. Sus variables contienen las URL privadas y la referencia ARN de la credencial interna. Vincula la cola de compras mediante un event source mapping y valida acceso a VPC, SQS y CloudWatch.
 4. Configura cuatro target groups de tipo `ip` con health check en `/actuator/health` y un ALB interno en dos zonas. Conecta el listener con un VPC Link V2 desde una HTTP API. Crea los métodos concretos que aparecen en `infra/gateway/routes.json`. Mantén las rutas internas fuera del Gateway y conserva el path original en la integración.
 5. Comprueba el catálogo y el login desde la URL del Gateway. Después simula un pago, verifica la emisión o devolución, y confirma que las rutas de servicio y aforo quedan fuera del acceso público.
 
@@ -136,7 +140,11 @@ Con los cuatro servicios estables y la sesión del laboratorio vigente:
 ./infra/aws/test-lab-purchase.ps1
 ```
 
-El primer script crea o actualiza `eventpass-process-purchase`, con Node.js 22, timeout de veinte segundos y el rol existente `LabRole`. Empaqueta los mismos `index.mjs` y `process-order.mjs` del emulador. La función se conecta a las subredes privadas de aplicación con el grupo de seguridad de compras y llama a los listeners internos del balanceador. Sus variables contienen las URL y el ARN de la credencial interna; obtiene el valor desde Secrets Manager con el SDK del runtime. En Floci sigue usando la variable local `MS_ORDERS_CLIENT_SECRET`. No se guardan valores de secretos en los archivos generados.
+El primer script construye y publica el Dockerfile del procesador en `eventpass/purchase-lambda` y crea o actualiza `eventpass-process-purchase-image`. Usa la base oficial de Lambda Node.js 22, el SDK de Secrets Manager fijado con `package-lock.json`, UID/GID 10001, timeout de veinte segundos y `LabRole`. Compila para Linux x86-64 con `--provenance=false`, como exige el formato de imagen de Lambda, y despliega el digest de ECR. La función se conecta a las subredes privadas de aplicación y llama al balanceador interno; obtiene la credencial desde Secrets Manager, sin incluir su valor en la imagen.
+
+AWS no permite cambiar una función existente entre ZIP e imagen. La migración crea la función de imagen y verifica una invocación sin compras que comprueba acceso a Auth antes de mover el vínculo SQS existente. La función ZIP `eventpass-process-purchase` se conserva sin ese consumidor como respaldo de migración; el vínculo sigue siendo único. No se borran colas, datos ni la función anterior. [Restricción de tipos de paquete en AWS](https://docs.aws.amazon.com/lambda/latest/dg/images-create.html). El informe local guarda la función y la imagen activas, el UUID del vínculo y su función anterior.
+
+El emulador Floci sigue usando las mismas fuentes mediante su API ZIP y ejecutándolas con su runtime Docker. La entrega real de los cuatro servicios y Lambda en AWS usa las cinco imágenes construidas por sus Dockerfiles.
 
 El vínculo procesa un mensaje por invocación y limita la concurrencia a dos para la sala. Comprueba visibilidad mínima de 120 segundos, cinco intentos y destino `eventpass-purchase-errors`; rechaza otro consumidor Lambda para esa cola. Una excepción deja el mensaje disponible para reintentar. La cola estándar no garantiza orden estricto ni entrega única: la protección contra sobreventa y duplicación depende de las reservas y emisiones idempotentes de los microservicios.
 
@@ -150,7 +158,7 @@ El informe `.local/aws-purchase-smoke.json` contiene los estados de las comproba
 ./infra/aws/test-lab-purchase-dlq.ps1
 ```
 
-La prueba exige una Lambda estable y que el ZIP local `.local/purchase.zip` coincida con su código activo. Prepara una orden propia y guarda una copia del ZIP original, sus hashes y el estado de restauración en `.local/`. Instala un envoltorio temporal que falla únicamente al emitir el ticket de esa orden. Auth, reserva de cupo y las demás órdenes conservan su comportamiento. No cambia las variables de Lambda, la política de las colas ni los servicios ECS. Las actualizaciones usan el `RevisionId` de AWS para detectar cambios concurrentes.
+La prueba exige una Lambda estable con `PackageType=Image` y un digest de `eventpass/purchase-lambda` en la cuenta autorizada. Guarda ese digest como imagen de restauración en `.local/`, prepara una orden propia y construye otra imagen Docker que falla únicamente al emitir el ticket de esa orden. Auth, reserva de cupo y las demás órdenes conservan su comportamiento. No cambia las variables de Lambda, la política de las colas ni los servicios ECS. Las actualizaciones usan el `RevisionId` de AWS para detectar cambios concurrentes.
 
 La orden paga con el proveedor simulado y agota cinco intentos con visibilidad de 120 segundos. La espera puede durar más de diez minutos, con un límite de veinticinco. Al encontrar el mensaje exacto en `eventpass-purchase-errors`, comprueba los fallos en CloudWatch y que la orden siga `PENDING_ISSUANCE/APPROVED`, con el cupo reservado y sin ticket. Un fallo técnico no equivale a rechazo por aforo ni confirma por sí solo una devolución.
 
@@ -172,7 +180,7 @@ El bloque `finally` intenta restaurar el código también si la prueba falla. Si
 ./infra/aws/test-lab-purchase-dlq.ps1 -Restore
 ```
 
-La restauración rechaza un ZIP alterado o una versión de Lambda ajena a la prueba para evitar sobrescribir otro despliegue. No ejecutes publicaciones de Lambda durante esta prueba. Tras una interrupción, revisa la orden; si está en la DLQ, usa la recuperación selectiva. No se purgan colas ni se reenvían todos sus mensajes de forma indiscriminada.
+La restauración vuelve al digest original y rechaza una versión de Lambda ajena a la prueba para evitar sobrescribir otro despliegue. No borres imágenes de ECR ni ejecutes publicaciones de Lambda durante esta prueba. Tras una interrupción, revisa la orden; si está en la DLQ, usa la recuperación selectiva. No se purgan colas ni se reenvían todos sus mensajes de forma indiscriminada.
 
 GitHub Actions ejecuta pruebas del fallo aislado y del recuperador con AWS simulado: cuenta incorrecta, selección del mensaje, conservación de atributos, confirmación antes del borrado y fallo de envío. La prueba real de veinticinco minutos se ejecuta manualmente en la sala y no forma parte del pipeline de cada commit.
 
@@ -182,7 +190,7 @@ Cada cambio en `develop` ejecuta `Run tests`. Los runners de GitHub levantan sus
 
 El job final `Deploy tested develop to Learner Lab` llama a `deploy-aws.yml` cuando las pruebas E2E y de producción pasan y la variable de repositorio `AWS_DEPLOY_ENABLED` vale exactamente `true`. Los errores de otros jobs también impiden publicar. Los pull requests nunca ejecutan el despliegue. Sin esa variable, el despliegue queda omitido y las pruebas siguen funcionando.
 
-Antes de activarlo, deben existir los cuatro repositorios ECR, el clúster y los cuatro servicios ECS, las dependencias, la función Lambda con su entorno/VPC y el vínculo de SQS habilitado con `BatchSize=1` apuntando a la función sin alias. Los servicios deben usar el controlador `ECS` con circuit breaker y rollback habilitados. Deben estar conectados al ALB interno y al API Gateway. Este pipeline actualiza aplicaciones sobre esa infraestructura existente; no la aprovisiona.
+Antes de activarlo, deben existir los cinco repositorios ECR (cuatro servicios y procesador Lambda), el clúster y los cuatro servicios ECS, las dependencias, la función Lambda de imagen con su entorno/VPC y el vínculo de SQS habilitado con `BatchSize=1` apuntando a la función sin alias. El JSON `AWS_DEPLOY_CONFIG` incluye `purchaseRepository: "eventpass/purchase-lambda"` y `purchaseFunction: "eventpass-process-purchase-image"`. Los servicios usan ECS con circuit breaker y rollback y están conectados al ALB interno y al API Gateway. Este pipeline actualiza aplicaciones sobre esa infraestructura existente; no la aprovisiona.
 
 En GitHub, crea el Environment `aws-lab` y configura:
 
@@ -199,7 +207,7 @@ No copies contraseñas ni tokens a los JSON o al repositorio. Las contraseñas d
 
 `deploy-lab.mjs --check` valida las definiciones, la identidad, la existencia de ECR/ECS/Lambda, el vínculo SQS y una prueba del Gateway sin publicar imágenes ni actualizar aplicaciones. Requiere AWS CLI, Node y credenciales vigentes, además de `AWS_DEPLOY_CONFIG`, `AWS_TASK_CONFIG` y `DEPLOY_SHA` en el entorno. Comprueba recursos accesibles, pero no garantiza permisos de escritura como `iam:PassRole`; estos se ejercen al publicar.
 
-La ejecución completa comprueba que sigue desplegando el último commit de `develop`, construye las cuatro imágenes para Linux x86-64, las publica con una etiqueta que incluye el commit y un identificador de ejecución, y obtiene sus digests. Esto permite repetir el mismo commit con repositorios ECR de etiquetas inmutables. Genera y registra nuevas tareas, actualiza el ZIP de Lambda, cambia los servicios ECS y espera su estabilidad. Verifica también que ECS conserva la nueva definición: un rollback a la versión anterior hace fallar el job. Al terminar, prueba catálogo público, rechazo de órdenes sin sesión y bloqueo de la ruta interna de tokens por el Gateway.
+La ejecución completa comprueba que sigue desplegando el último commit de `develop`, construye las cinco imágenes Docker para Linux x86-64, las publica con una etiqueta que incluye el commit y un identificador de ejecución, y obtiene sus digests. Esto permite repetir el mismo commit con repositorios ECR de etiquetas inmutables. Genera y registra nuevas tareas, actualiza Lambda con `--image-uri`, cambia los servicios ECS y espera su estabilidad. Verifica también que ECS conserva la nueva definición: un rollback a la versión anterior hace fallar el job. Al terminar, prueba catálogo público, rechazo de órdenes sin sesión y bloqueo de la ruta interna de tokens por el Gateway.
 
 La URL del Gateway, VPC Link, listener y target groups permanecen asociados a los servicios ECS: las tareas nuevas reciben tráfico a través del mismo acceso. Cambiar `routes.json`, la red, esquemas de secretos o la configuración de Lambda requiere actualizar la infraestructura correspondiente; este pipeline publica imágenes, variables de tareas y código de Lambda. Las variables y permisos de Lambda deben prepararse antes. El despliegue de los cuatro servicios y Lambda no es una transacción: sus contratos deben ser compatibles durante la actualización, y los cambios SQL deben permitir convivencia entre versiones. Para volver a una versión anterior se necesita una migración compatible y las definiciones/digests anteriores.
 

@@ -99,7 +99,7 @@ try {
         $replay = @{ Records = @(@{ body = $message }) }
         $file = Join-Path $local 'purchase-replay.json'
         $replay | ConvertTo-Json -Depth 12 | Set-Content -LiteralPath $file
-        $invoked = & $awsScript -InputFile $file -AwsArguments @('lambda','invoke','--function-name','eventpass-process-purchase',
+        $invoked = & $awsScript -InputFile $file -AwsArguments @('lambda','invoke','--function-name',$deployment.FunctionArn,
             '--payload','file:///input/request.json','--cli-binary-format','raw-in-base64-out','/tmp/purchase-response.json','--output','json') | ConvertFrom-Json
         Assert-Purchase (-not $invoked.FunctionError -and $invoked.StatusCode -eq 200) 'Falló la repetición de una entrega de Lambda.'
         $again = Invoke-PurchaseProbe 'GET' "/api/v1/orders/$($buyer.Order.id)" 200 $null $buyer.Token

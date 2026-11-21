@@ -25,11 +25,16 @@ class SessionServiceTest {
     @Mock
     private ValueOperations<String, String> valueOperations;
 
+    @Mock
+    private org.springframework.data.redis.core.SetOperations<String,String> setOperations;
+
     private SessionService sessionService;
 
     @BeforeEach
     void setUp() {
         sessionService = new SessionService(redisTemplate);
+        lenient().when(redisTemplate.opsForValue()).thenReturn(valueOperations);
+        lenient().when(redisTemplate.opsForSet()).thenReturn(setOperations);
 
         ReflectionTestUtils.setField(
                 sessionService,
@@ -179,16 +184,12 @@ class SessionServiceTest {
     @Test
     @SuppressWarnings("unchecked")
     void revokingOneUserPreservesOtherUsersSessions() {
-        org.springframework.data.redis.core.Cursor<String> cursor = mock(org.springframework.data.redis.core.Cursor.class);
-        when(redisTemplate.scan(any())).thenReturn(cursor);
-        when(cursor.hasNext()).thenReturn(true, true, false);
-        when(cursor.next()).thenReturn("jwt:session:owner", "jwt:session:other");
-        when(redisTemplate.opsForValue()).thenReturn(valueOperations);
-        when(valueOperations.get("jwt:session:owner")).thenReturn("owner@example.com");
-        when(valueOperations.get("jwt:session:other")).thenReturn("other@example.com");
+        when(setOperations.members("jwt:user-sessions:owner@example.com"))
+                .thenReturn(java.util.Set.of("owner-one", "owner-two"));
         sessionService.revokeUserSessions("owner@example.com");
-        verify(redisTemplate).delete("jwt:session:owner");
+        verify(redisTemplate).delete(argThat((java.util.Collection<String> keys) ->
+                keys.size() == 2 && keys.contains("jwt:session:owner-one") && keys.contains("jwt:session:owner-two")));
+        verify(setOperations, never()).members("jwt:user-sessions:other@example.com");
         verify(redisTemplate, never()).delete("jwt:session:other");
-        verify(cursor).close();
     }
 }

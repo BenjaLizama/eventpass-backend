@@ -22,7 +22,7 @@ Las rutas desconocidas se deniegan. No se confía en headers de identidad enviad
 
 El TTL del autorizador es **cero**: no se reutiliza una autorización de otra ruta ni se conserva acceso después del logout. Si Auth, Redis, la red o el formato del token fallan, se deniega el acceso. Un header ausente devuelve 401; una denegación del autorizador puede devolver 403. Ninguno se considera acceso autorizado. El autorizador no registra Bearers ni lleva el secreto de firma en su imagen o entorno.
 
-Cambiar rol, estado o eliminar un usuario revoca sus sesiones mediante SCAN en Redis. Los tokens emitidos antes de distinguir `ACCESS`/`REFRESH` requieren volver a iniciar sesión. El rol STAFF es global en el modelo actual; asignar validadores a eventos concretos requeriría un modelo adicional de asignaciones.
+Cambiar rol, estado o eliminar un usuario revoca sus sesiones mediante un índice por usuario en Redis, sin recorrer las sesiones de los demás. Los tokens emitidos antes de distinguir `ACCESS`/`REFRESH` requieren volver a iniciar sesión. El rol STAFF es global en el modelo actual; asignar validadores a eventos concretos requeriría un modelo adicional de asignaciones.
 
 ## Docker, pruebas y AWS
 

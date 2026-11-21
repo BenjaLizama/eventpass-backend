@@ -1,0 +1,19 @@
+{
+  "accountId": "123456789012",
+  "region": "us-east-1",
+  "cluster": "eventpass",
+  "services": {
+    "ms-auth": "eventpass-ms-auth",
+    "ms-events": "eventpass-ms-events",
+    "ms-orders": "eventpass-ms-orders",
+    "ms-tickets": "eventpass-ms-tickets"
+  },
+  "repositories": {
+    "ms-auth": "eventpass/ms-auth",
+    "ms-events": "eventpass/ms-events",
+    "ms-orders": "eventpass/ms-orders",
+    "ms-tickets": "eventpass/ms-tickets"
+  },
+  "purchaseFunction": "eventpass-process-purchase",
+  "gatewayUrl": "https://example.execute-api.us-east-1.amazonaws.com"
+}

@@ -1,0 +1,52 @@
+name: Deploy AWS Learner Lab
+
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: eventpass-aws-lab
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Publish tested version to AWS
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    environment: aws-lab
+    env:
+      AWS_DEPLOY_CONFIG: ${{ vars.AWS_DEPLOY_CONFIG }}
+      AWS_TASK_CONFIG: ${{ vars.AWS_TASK_CONFIG }}
+      DEPLOY_SHA: ${{ github.sha }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.sha }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Validate deployment configuration
+        id: config
+        run: |
+          node --input-type=module <<'NODE'
+          import { appendFileSync } from 'node:fs';
+          import { validateConfig } from './infra/aws/deploy-lab.mjs';
+          const config = JSON.parse(process.env.AWS_DEPLOY_CONFIG);
+          validateConfig(config, JSON.parse(process.env.AWS_TASK_CONFIG), process.env.DEPLOY_SHA);
+          appendFileSync(process.env.GITHUB_OUTPUT, `region=${config.region}\naccount=${config.accountId}\n`);
+          NODE
+      - name: Connect using temporary lab credentials
+        uses: aws-actions/configure-aws-credentials@v6.3.0
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
+          aws-region: ${{ steps.config.outputs.region }}
+          allowed-account-ids: ${{ steps.config.outputs.account }}
+          mask-aws-account-id: true
+      - name: Check identity, resources and Gateway before publishing
+        run: node infra/aws/deploy-lab.mjs --check
+      - name: Publish images and update ECS and purchase Lambda
+        run: node infra/aws/deploy-lab.mjs

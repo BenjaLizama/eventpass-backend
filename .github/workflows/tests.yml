@@ -37,16 +37,16 @@ jobs:
           filters: |
             ms-auth:
               - 'ms-auth/**'
-              - '.github/workflows/tests.yml'
+              - '.github/workflows/**'
             ms-orders:
               - 'ms-orders/**'
-              - '.github/workflows/tests.yml'
+              - '.github/workflows/**'
             ms-events:
               - 'ms-events/**'
-              - '.github/workflows/tests.yml'
+              - '.github/workflows/**'
             ms-tickets:
               - 'ms-tickets/**'
-              - '.github/workflows/tests.yml'
+              - '.github/workflows/**'
             e2e:
               - 'ms-auth/**'
               - 'ms-events/**'
@@ -57,7 +57,7 @@ jobs:
               - 'scripts/**'
               - 'infra/**'
               - '.env.example'
-              - '.github/workflows/tests.yml'
+              - '.github/workflows/**'
 
   ms-auth-tests:
     name: ms-auth Tests
@@ -186,6 +186,7 @@ jobs:
               exit 0
             fi
 
+            echo "Waiting for healthy services ($i/60)"
             sleep 5
           done
 
@@ -295,6 +296,7 @@ jobs:
       - name: Test Lambda and render ECS task definitions
         run: |
           node --test infra/purchase-lambda/*.test.mjs
+          node --test infra/aws/*.test.mjs
           node infra/aws/render-task-definitions.mjs infra/aws/task-config.example.json "$RUNNER_TEMP/eventpass-tasks"
           for service in auth events orders tickets; do
             jq -e --arg family "eventpass-ms-$service" '
@@ -319,3 +321,13 @@ jobs:
       - name: Show deployment-check logs
         if: failure()
         run: docker compose logs --tail=100
+
+  deploy-aws:
+    name: Deploy tested develop to Learner Lab
+    needs: [ms-auth-tests, ms-events-tests, ms-orders-tests, ms-tickets-tests, e2e-tests, deployment-checks]
+    if: >-
+      always() && !cancelled() && !failure() &&
+      github.event_name == 'push' && github.ref == 'refs/heads/develop' &&
+      vars.AWS_DEPLOY_ENABLED == 'true' &&
+      needs.e2e-tests.result == 'success' && needs.deployment-checks.result == 'success'
+    uses: ./.github/workflows/deploy-aws.yml

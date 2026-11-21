@@ -31,3 +31,32 @@ GitHub Actions prueba el flujo de referencia, el Gateway privado con Floci y la 
 Antes de aprovisionar recursos, confirma la cuenta y región desde la consola de la sala. La terminal del navegador y la consola pueden usar identidades distintas. Comprueba qué identidad tiene autorización para subir imágenes a ECR y si el laboratorio permite registrar tareas Fargate con el rol `LabRole`. Confirma también las subredes privadas, los permisos de VPC Link y la salida necesaria para que ECS descargue imágenes y se conecte a SQS, DynamoDB, Secrets Manager y CloudWatch.
 
 La primera validación en AWS consiste en publicar una imagen y arrancar una tarea conectada a sus dependencias. Después se conectan las cuatro tareas al ALB privado y se repite la compra completa por API Gateway. El alcance de esa prueba incluye sesión, emisión, rechazo por aforo y recuperación desde la cola de errores.
+
+## Pipeline de pruebas y publicación
+
+Cada cambio en `develop` ejecuta `Run tests`. Los runners de GitHub levantan sus propios contenedores de Floci y dependencias; sus recursos son temporales. El Floci del computador se actualiza al ejecutar de nuevo `start-local-purchase.ps1 -Build`. Un runner de GitHub no puede llegar al `localhost` del computador.
+
+El job final `Deploy tested develop to Learner Lab` llama a `deploy-aws.yml` cuando las pruebas E2E y de producción pasan y la variable de repositorio `AWS_DEPLOY_ENABLED` vale exactamente `true`. Los errores de otros jobs también impiden publicar. Los pull requests nunca ejecutan el despliegue. Sin esa variable, el despliegue queda omitido y las pruebas siguen funcionando.
+
+Antes de activarlo, deben existir los cuatro repositorios ECR, el clúster y los cuatro servicios ECS, las dependencias, la función Lambda con su entorno/VPC y el vínculo de SQS habilitado con `BatchSize=1` apuntando a la función sin alias. Los servicios deben usar el controlador `ECS` con circuit breaker y rollback habilitados. Deben estar conectados al ALB interno y al API Gateway. Este pipeline actualiza aplicaciones sobre esa infraestructura existente; no la aprovisiona.
+
+En GitHub, crea el Environment `aws-lab` y configura:
+
+| Tipo | Nombre | Contenido |
+| --- | --- | --- |
+| Variable del Environment | `AWS_DEPLOY_CONFIG` | JSON completo basado en `deploy-config.example.json`, con la cuenta y recursos reales. |
+| Variable del Environment | `AWS_TASK_CONFIG` | JSON completo basado en `task-config.example.json`, con roles, direcciones privadas y referencias ARN de secretos reales. Los digests de imágenes se reemplazan durante la publicación. |
+| Secret del Environment | `AWS_ACCESS_KEY_ID` | Access key temporal obtenida en AWS Details de la sesión de laboratorio. |
+| Secret del Environment | `AWS_SECRET_ACCESS_KEY` | Secret key temporal de esa misma sesión. |
+| Secret del Environment | `AWS_SESSION_TOKEN` | Session token temporal de esa misma sesión. |
+| Variable del repositorio | `AWS_DEPLOY_ENABLED` | `true` solo después de verificar la conexión y recursos de la sala. |
+
+No copies contraseñas ni tokens a los JSON o al repositorio. Las contraseñas de las aplicaciones se referencian por ARN; sus valores permanecen en Secrets Manager/SSM. Las credenciales de AWS Academy caducan y requieren renovar los tres Secrets cuando cambie la sesión. El inicio del laboratorio sigue siendo necesario. Si se dispone de un rol federado de GitHub mediante OIDC, puede sustituirse esta conexión temporal.
+
+`deploy-lab.mjs --check` valida las definiciones, la identidad, la existencia de ECR/ECS/Lambda, el vínculo SQS y una prueba del Gateway sin publicar imágenes ni actualizar aplicaciones. Requiere AWS CLI, Node y credenciales vigentes, además de `AWS_DEPLOY_CONFIG`, `AWS_TASK_CONFIG` y `DEPLOY_SHA` en el entorno. Comprueba recursos accesibles, pero no garantiza permisos de escritura como `iam:PassRole`; estos se ejercen al publicar.
+
+La ejecución completa comprueba que sigue desplegando el último commit de `develop`, construye las cuatro imágenes para Linux x86-64, las publica con una etiqueta que incluye el commit y un identificador de ejecución, y obtiene sus digests. Esto permite repetir el mismo commit con repositorios ECR de etiquetas inmutables. Genera y registra nuevas tareas, actualiza el ZIP de Lambda, cambia los servicios ECS y espera su estabilidad. Verifica también que ECS conserva la nueva definición: un rollback a la versión anterior hace fallar el job. Al terminar, prueba catálogo público, rechazo de órdenes sin sesión y bloqueo de la ruta interna de tokens por el Gateway.
+
+La URL del Gateway, VPC Link, listener y target groups permanecen asociados a los servicios ECS: las tareas nuevas reciben tráfico a través del mismo acceso. Cambiar `routes.json`, la red, esquemas de secretos o la configuración de Lambda requiere actualizar la infraestructura correspondiente; este pipeline publica imágenes, variables de tareas y código de Lambda. Las variables y permisos de Lambda deben prepararse antes. El despliegue de los cuatro servicios y Lambda no es una transacción: sus contratos deben ser compatibles durante la actualización, y los cambios SQL deben permitir convivencia entre versiones. Para volver a una versión anterior se necesita una migración compatible y las definiciones/digests anteriores.
+
+En GitHub Actions se añaden pruebas del controlador de despliegue con respuestas AWS simuladas: cuenta incorrecta, recursos incompletos, falta de rollback, Gateway caído, publicación por digest, ejecución antigua y rollback de ECS. Estas pruebas validan la lógica del pipeline; la conectividad real con la sala se confirma con el preflight y el primer despliegue.

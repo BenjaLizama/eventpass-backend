@@ -79,6 +79,28 @@ El NAT y el ALB generan cargos mientras existan. La red de laboratorio usa un so
 
 La primera prueba comprueba los recursos reales: VPC Link disponible, ALB interno, rutas públicas exactas, subredes privadas, salida de aplicación por NAT y ausencia de ingreso abierto en grupos de seguridad. También comprueba que las rutas internas y Actuator devuelven 404 por el Gateway. Antes de arrancar ECS, el catálogo devuelve 503 por falta de targets; eso comprueba el recorrido hasta el balanceador, no el funcionamiento del catálogo. Con `-ServicesReady` se exige HTTP 200.
 
+### Aurora, Redis y secretos
+
+```powershell
+./infra/aws/start-lab-data.ps1
+./infra/aws/start-lab-data.ps1 -Apply
+./infra/aws/initialize-lab-data.ps1
+```
+
+El stack `eventpass-data` crea Aurora PostgreSQL 17.11 con una instancia `db.t4g.medium`, un Redis OSS 7.1 `cache.t3.micro` y siete secretos de aplicación generados por AWS. RDS administra además el secreto del usuario maestro. SQL y Redis se ubican en las subredes privadas de datos. SQL exige TLS; Redis tiene TLS obligatorio, contraseña y cifrado en reposo. Ambos generan cargos mientras estén activos.
+
+Las bases `eventpass_auth`, `eventpass_events` y `eventpass_orders` comparten el clúster Aurora para reducir consumo en la sala. Cada una tiene propietario y contraseña propios; sus usuarios no pueden conectarse a las otras dos. Comparten capacidad y disponibilidad física: para aislar esos aspectos harían falta clústeres separados. El laboratorio usa un writer SQL y un nodo Redis, sin alta disponibilidad de instancias.
+
+`initialize-lab-data.ps1` construye y publica una imagen auxiliar en `eventpass/data-bootstrap` y la ejecuta una vez en Fargate, sin IP pública. La tarea recibe las contraseñas mediante referencias de Secrets Manager e inyección de secretos de ECS. Crea los usuarios y bases, comprueba el propietario al reutilizarlas y conserva las contraseñas existentes. PostgreSQL 17 necesita que el usuario maestro pueda asumir el rol propietario para crear la base; ese permiso se concede al maestro, sin conceder privilegios de administración a los usuarios de aplicación.
+
+La tarea comprueba TLS y lectura/escritura en las tres bases, seis conexiones cruzadas que deben rechazarse, y Redis con contraseña, TTL, escritura, lectura y borrado. Rechaza el acceso a Redis sin contraseña. Sus tablas de prueba son temporales y hacen rollback; la clave de prueba de Redis se borra y también tiene TTL de sesenta segundos. Los logs no imprimen contraseñas, SQL de creación de usuarios ni errores completos del cliente. Después de la verificación, la tarea se detiene y queda un informe en `.local/aws-data-verification.json`.
+
+Los outputs se guardan en `.local/aws-data-outputs.json`. `task-settings.mjs` genera `.local/aws-task-settings.json` con las direcciones privadas, usuarios y referencias ARN con selector `:password::`. El secreto maestro no se entrega a los microservicios. Las imágenes SQL incluyen el certificado de RDS y sus URL usan `sslmode=verify-full`. Redis se configura con `REDIS_SSL=true`.
+
+El archivo generado aún tiene `images: {}`: los digests reales de ECR se completan en la etapa de publicación de los cuatro servicios. No lo uses para habilitar despliegue automático hasta completar esa etapa. Las tablas de negocio y `flyway_schema_history` se crean cuando Spring Boot arranca con el perfil `prod`; esta tarea solo prepara bases, roles y verifica sus conexiones.
+
+El script de CloudFormation rechaza eliminaciones o reemplazos de recursos de datos. El clúster conserva un snapshot al eliminarse desde CloudFormation y los secretos de aplicación tienen política de conservación. Esta conservación no crea un procedimiento automático de restauración ni detiene los cargos; las rotaciones de contraseñas SQL requieren actualizar el rol y su secreto de forma coordinada.
+
 ### Publicar después de las pruebas
 
 Cada cambio en `develop` ejecuta `Run tests`. Los runners de GitHub levantan sus propios contenedores de Floci y dependencias; sus recursos son temporales. El Floci del computador se actualiza al ejecutar de nuevo `start-local-purchase.ps1 -Build`. Un runner de GitHub no puede llegar al `localhost` del computador.

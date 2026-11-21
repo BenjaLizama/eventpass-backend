@@ -12,6 +12,7 @@
 # Archivos de entorno y secretos local
 .env
 /.local/
+**/node_modules/
 
 # Archivos subidos o temporales
 /uploads/

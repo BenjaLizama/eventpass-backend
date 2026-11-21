@@ -308,6 +308,8 @@ jobs:
       - name: Test lab initialization without AWS credentials
         shell: pwsh
         run: ./infra/aws/test-lab-initialization.ps1
+      - name: Build private database verification image
+        run: docker build -t eventpass-data-bootstrap:ci infra/aws/data-bootstrap
       - name: Start with empty databases and DynamoDB Local
         run: |
           cp .env.example .env

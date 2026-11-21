@@ -4,6 +4,7 @@ import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { waitForDeployment } from './service-readiness.mjs';
 
 const services = ['ms-auth', 'ms-events', 'ms-orders', 'ms-tickets'];
 const required = (value, label, pattern) => {
@@ -42,7 +43,7 @@ export function validateConfig(config, tasks, revision) {
   }
 }
 
-export async function deploy(config, taskConfig, revision, run, checkOnly = false, smoke = smokeGateway) {
+export async function deploy(config, taskConfig, revision, run, checkOnly = false, smoke = smokeGateway, waitOptions = {}) {
   validateConfig(config, taskConfig, revision);
   const workspace = mkdtempSync(join(tmpdir(), 'eventpass-deploy-'));
   const aws = (...args) => run('aws', [...args, '--region', config.region, '--output', 'json', '--no-cli-pager']);
@@ -119,16 +120,9 @@ export async function deploy(config, taskConfig, revision, run, checkOnly = fals
       aws('ecs', 'update-service', '--cluster', config.cluster, '--service', config.services[service],
         '--task-definition', definitions[service]);
     }
-    aws('ecs', 'wait', 'services-stable', '--cluster', config.cluster, '--services', ...services.map(s => config.services[s]));
-    const updated = aws('ecs', 'describe-services', '--cluster', config.cluster, '--services', ...services.map(s => config.services[s]));
-    for (const service of services) {
-      const result = updated.services?.find(s => s.serviceName === config.services[service]);
-      if (!result || result.taskDefinition !== definitions[service] ||
-          result.runningCount !== result.desiredCount || result.pendingCount !== 0 ||
-          result.deployments?.find(d => d.status === 'PRIMARY')?.rolloutState !== 'COMPLETED') {
-        throw new Error('La versión nueva no quedó activa en ' + service + '; revisar rollback en ECS.');
-      }
-    }
+    await waitForDeployment(() => aws('ecs', 'describe-services', '--cluster', config.cluster,
+      '--services', ...services.map(s => config.services[s])),
+    Object.fromEntries(services.map(s => [config.services[s], definitions[s]])), waitOptions);
     await smoke(config.gatewayUrl);
     return { revision, images, definitions };
   } finally {

@@ -101,6 +101,32 @@ El archivo generado aún tiene `images: {}`: los digests reales de ECR se comple
 
 El script de CloudFormation rechaza eliminaciones o reemplazos de recursos de datos. El clúster conserva un snapshot al eliminarse desde CloudFormation y los secretos de aplicación tienen política de conservación. Esta conservación no crea un procedimiento automático de restauración ni detiene los cargos; las rotaciones de contraseñas SQL requieren actualizar el rol y su secreto de forma coordinada.
 
+### Desplegar y comprobar los cuatro servicios
+
+Después de verificar la capa de datos, guarda los cambios de los microservicios en un commit y ejecuta:
+
+```powershell
+./infra/aws/start-lab-services.ps1
+./infra/aws/test-lab-network.ps1 -ServicesReady
+./infra/aws/test-lab-services.ps1
+```
+
+La publicación construye imágenes Linux x86-64, las sube a ECR y registra las tareas con el digest de cada imagen. Los cuatro servicios Fargate usan subredes privadas, sin IP pública, y reciben tráfico del ALB interno. Las contraseñas se inyectan desde Secrets Manager. Spring Boot ejecuta las migraciones de las bases SQL con el perfil `prod`; Tickets utiliza `prod,dynamodb`.
+
+El script exige que ECS complete el despliegue de las definiciones solicitadas, con todas las tareas previstas en ejecución y sin tareas pendientes. Una versión anterior estable no cuenta como éxito de la versión nueva. Si se interrumpe la espera, puede repetirse sin construir imágenes:
+
+```powershell
+./infra/aws/Wait-LabServices.ps1
+# Para actualizar únicamente Tickets después del primer despliegue:
+./infra/aws/start-lab-services.ps1 -Services ms-tickets
+```
+
+La espera usa las definiciones solicitadas guardadas en `.local/*-service.json`. La actualización parcial conserva los digests de los otros servicios en `.local/aws-task-config.json`. Si faltan esos datos, el primer despliegue debe incluir los cuatro servicios.
+
+`test-lab-services.ps1` comprueba el catálogo por API Gateway, las rutas internas bloqueadas, registro, login, renovación y revocación de sesión, acceso autenticado a Órdenes y Tickets, y rechazo de acciones administrativas para compradores. Crea un evento de prueba y una orden, comprueba el importe, cancela la orden y verifica que el aforo no cambió. Cancela el evento y cierra las sesiones al terminar. Conserva registros de prueba con nombres únicos; no elimina datos de negocio existentes. Los informes quedan en `.local/`, sin contraseñas ni tokens.
+
+Esta prueba no realiza el pago simulado: con la compra asíncrona habilitada, la siguiente etapa es conectar la función Lambda y el vínculo SQS y después comprobar emisión, aforo lleno, devolución simulada y recuperación de errores en AWS. Hasta validar ese recorrido completo, deja deshabilitado el despliegue automático del laboratorio.
+
 ### Publicar después de las pruebas
 
 Cada cambio en `develop` ejecuta `Run tests`. Los runners de GitHub levantan sus propios contenedores de Floci y dependencias; sus recursos son temporales. El Floci del computador se actualiza al ejecutar de nuevo `start-local-purchase.ps1 -Build`. Un runner de GitHub no puede llegar al `localhost` del computador.

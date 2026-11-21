@@ -101,7 +101,8 @@ test('publishes four pinned images before updating services, then verifies Gatew
 
 test('an ECS rollback cannot be reported as successful deployment', async () => {
   const mock = fake({ stableOldVersion: true });
-  await assert.rejects(deploy(config, tasks, sha, mock.run, false, async () => {}), /versión nueva/);
+  await assert.rejects(deploy(config, tasks, sha, mock.run, false, async () => {},
+    { attempts: 2, sleep: async () => {} }), /versión nueva/);
 });
 
 test('Gateway failure prevents all publications', async () => {

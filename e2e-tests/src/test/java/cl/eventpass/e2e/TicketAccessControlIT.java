@@ -45,6 +45,13 @@ class TicketAccessControlIT {
     );
 
     @Test
+    @DisplayName("Tickets responde 401 sin autenticación o con JWT malformado")
+    void shouldRequireAuthenticationBeforeTicketAccess() throws Exception {
+        assertEquals(401, request("GET", tickets, "/api/v1/tickets/me", null, null).statusCode());
+        assertEquals(401, request("GET", tickets, "/api/v1/tickets/me", "not-a-jwt", null).statusCode());
+    }
+
+    @Test
     @DisplayName("Cerrar sesión revoca el acceso a los cuatro microservicios")
     void shouldRejectRevokedSessionAcrossServices() throws Exception {
         String token = login(

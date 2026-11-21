@@ -1,5 +1,24 @@
 import { processOrder } from './process-order.mjs';
 
+async function readSecret(arn) {
+  // AWS supplies SDK v3 and the credentials of the Lambda execution role.
+  const { SecretsManagerClient, GetSecretValueCommand } = await import('@aws-sdk/client-secrets-manager');
+  return new SecretsManagerClient({}).send(new GetSecretValueCommand({ SecretId: arn }));
+}
+
+export async function resolveClientSecret(environment, read = readSecret) {
+  if (environment.MS_ORDERS_CLIENT_SECRET_ARN) {
+    const result = await read(environment.MS_ORDERS_CLIENT_SECRET_ARN);
+    let password;
+    try { password = JSON.parse(result.SecretString).password; }
+    catch { throw new Error('El secreto del cliente interno no tiene el formato esperado.'); }
+    if (typeof password !== 'string' || !password.trim()) throw new Error('El secreto del cliente interno está vacío.');
+    return password;
+  }
+  if (!environment.MS_ORDERS_CLIENT_SECRET) throw new Error('Falta el secreto del cliente interno.');
+  return environment.MS_ORDERS_CLIENT_SECRET;
+}
+
 async function call(service, path, method, body, token) {
   const response = await fetch(service.replace(/\/+$/, '') + path, {
     method,
@@ -21,7 +40,7 @@ export async function handler(event) {
   const orders = process.env.ORDERS_SERVICE_URL ?? 'http://ms-orders:8083';
   const credentials = await call(auth, '/api/v1/auth/service-token', 'POST', {
     clientId: process.env.MS_ORDERS_CLIENT_ID,
-    clientSecret: process.env.MS_ORDERS_CLIENT_SECRET
+    clientSecret: await resolveClientSecret(process.env)
   });
   const token = credentials.accessToken;
   if (!token) throw new Error('Auth no devolvió un token de servicio.');

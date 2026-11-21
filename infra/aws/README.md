@@ -127,6 +127,23 @@ La espera usa las definiciones solicitadas guardadas en `.local/*-service.json`.
 
 Esta prueba no realiza el pago simulado: con la compra asíncrona habilitada, la siguiente etapa es conectar la función Lambda y el vínculo SQS y después comprobar emisión, aforo lleno, devolución simulada y recuperación de errores en AWS. Hasta validar ese recorrido completo, deja deshabilitado el despliegue automático del laboratorio.
 
+### Compra con SQS y Lambda en la sala
+
+Con los cuatro servicios estables y la sesión del laboratorio vigente:
+
+```powershell
+./infra/aws/start-lab-purchase.ps1
+./infra/aws/test-lab-purchase.ps1
+```
+
+El primer script crea o actualiza `eventpass-process-purchase`, con Node.js 22, timeout de veinte segundos y el rol existente `LabRole`. Empaqueta los mismos `index.mjs` y `process-order.mjs` del emulador. La función se conecta a las subredes privadas de aplicación con el grupo de seguridad de compras y llama a los listeners internos del balanceador. Sus variables contienen las URL y el ARN de la credencial interna; obtiene el valor desde Secrets Manager con el SDK del runtime. En Floci sigue usando la variable local `MS_ORDERS_CLIENT_SECRET`. No se guardan valores de secretos en los archivos generados.
+
+El vínculo procesa un mensaje por invocación y limita la concurrencia a dos para la sala. Comprueba visibilidad mínima de 120 segundos, cinco intentos y destino `eventpass-purchase-errors`; rechaza otro consumidor Lambda para esa cola. Una excepción deja el mensaje disponible para reintentar. La cola estándar no garantiza orden estricto ni entrega única: la protección contra sobreventa y duplicación depende de las reservas y emisiones idempotentes de los microservicios.
+
+La prueba crea dos compradores y dos órdenes antes del pago para un único cupo. Paga ambas con el proveedor simulado y espera una orden `PAID/APPROVED` con un ticket y otra `REJECTED_NO_CAPACITY/REFUNDED` sin ticket. Después invoca la función otra vez con cada compra para comprobar que conserva el resultado, el ticket y el aforo. También comprueba privacidad del ticket, acceso solo para STAFF y rechazo de reutilización con HTTP 409. No conecta una pasarela ni mueve dinero real.
+
+El informe `.local/aws-purchase-smoke.json` contiene los estados de las comprobaciones y las órdenes de prueba, sin JWT, contraseñas ni códigos de entrada. Al terminar correctamente cancela el evento y cierra las sesiones; conserva los registros de prueba. Si falla, conserva el evento para diagnosticar la compra pendiente y cierra las sesiones. Este recorrido no fuerza un fallo persistente ni demuestra el traslado y redrive de un mensaje por la DLQ real; esa recuperación requiere una prueba separada y controlada.
+
 ### Publicar después de las pruebas
 
 Cada cambio en `develop` ejecuta `Run tests`. Los runners de GitHub levantan sus propios contenedores de Floci y dependencias; sus recursos son temporales. El Floci del computador se actualiza al ejecutar de nuevo `start-local-purchase.ps1 -Build`. Un runner de GitHub no puede llegar al `localhost` del computador.

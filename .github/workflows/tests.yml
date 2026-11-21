@@ -305,9 +305,11 @@ jobs:
               and (.containerDefinitions[0].environment | all(.name != "JWT_SECRET"))
             ' "$RUNNER_TEMP/eventpass-tasks/ms-$service.json"
           done
-      - name: Test lab initialization without AWS credentials
+      - name: Test lab initialization and recovery without AWS credentials
         shell: pwsh
-        run: ./infra/aws/test-lab-initialization.ps1
+        run: |
+          ./infra/aws/test-lab-initialization.ps1
+          ./infra/aws/test-lab-recovery.ps1
       - name: Build private database verification image
         run: docker build -t eventpass-data-bootstrap:ci infra/aws/data-bootstrap
       - name: Start with empty databases and DynamoDB Local

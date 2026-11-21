@@ -125,7 +125,7 @@ La espera usa las definiciones solicitadas guardadas en `.local/*-service.json`.
 
 `test-lab-services.ps1` comprueba el catálogo por API Gateway, las rutas internas bloqueadas, registro, login, renovación y revocación de sesión, acceso autenticado a Órdenes y Tickets, y rechazo de acciones administrativas para compradores. Crea un evento de prueba y una orden, comprueba el importe, cancela la orden y verifica que el aforo no cambió. Cancela el evento y cierra las sesiones al terminar. Conserva registros de prueba con nombres únicos; no elimina datos de negocio existentes. Los informes quedan en `.local/`, sin contraseñas ni tokens.
 
-Esta prueba no realiza el pago simulado: con la compra asíncrona habilitada, la siguiente etapa es conectar la función Lambda y el vínculo SQS y después comprobar emisión, aforo lleno, devolución simulada y recuperación de errores en AWS. Hasta validar ese recorrido completo, deja deshabilitado el despliegue automático del laboratorio.
+Esta prueba no realiza el pago simulado. Usa las pruebas de compra y de recuperación de las secciones siguientes para comprobar emisión, aforo lleno, devolución simulada y fallos persistentes. Mantén deshabilitado el despliegue automático del laboratorio hasta completar esas verificaciones y preparar su configuración y credenciales.
 
 ### Compra con SQS y Lambda en la sala
 
@@ -143,6 +143,38 @@ El vínculo procesa un mensaje por invocación y limita la concurrencia a dos pa
 La prueba crea dos compradores y dos órdenes antes del pago para un único cupo. Paga ambas con el proveedor simulado y espera una orden `PAID/APPROVED` con un ticket y otra `REJECTED_NO_CAPACITY/REFUNDED` sin ticket. Después invoca la función otra vez con cada compra para comprobar que conserva el resultado, el ticket y el aforo. También comprueba privacidad del ticket, acceso solo para STAFF y rechazo de reutilización con HTTP 409. No conecta una pasarela ni mueve dinero real.
 
 El informe `.local/aws-purchase-smoke.json` contiene los estados de las comprobaciones y las órdenes de prueba, sin JWT, contraseñas ni códigos de entrada. Al terminar correctamente cancela el evento y cierra las sesiones; conserva los registros de prueba. Si falla, conserva el evento para diagnosticar la compra pendiente y cierra las sesiones. Este recorrido no fuerza un fallo persistente ni demuestra el traslado y redrive de un mensaje por la DLQ real; esa recuperación requiere una prueba separada y controlada.
+
+### Fallo persistente y recuperación selectiva en AWS
+
+```powershell
+./infra/aws/test-lab-purchase-dlq.ps1
+```
+
+La prueba exige una Lambda estable y que el ZIP local `.local/purchase.zip` coincida con su código activo. Prepara una orden propia y guarda una copia del ZIP original, sus hashes y el estado de restauración en `.local/`. Instala un envoltorio temporal que falla únicamente al emitir el ticket de esa orden. Auth, reserva de cupo y las demás órdenes conservan su comportamiento. No cambia las variables de Lambda, la política de las colas ni los servicios ECS. Las actualizaciones usan el `RevisionId` de AWS para detectar cambios concurrentes.
+
+La orden paga con el proveedor simulado y agota cinco intentos con visibilidad de 120 segundos. La espera puede durar más de diez minutos, con un límite de veinticinco. Al encontrar el mensaje exacto en `eventpass-purchase-errors`, comprueba los fallos en CloudWatch y que la orden siga `PENDING_ISSUANCE/APPROVED`, con el cupo reservado y sin ticket. Un fallo técnico no equivale a rechazo por aforo ni confirma por sí solo una devolución.
+
+Después restaura el código normal y verifica su hash antes de recuperar la orden. La recuperación recibe lotes de la DLQ, selecciona el `orderId`, conserva cuerpo y atributos y reenvía a `eventpass-purchase-pending`. Borra el mensaje de la DLQ solo después de la confirmación de SQS. Los mensajes ajenos recuperan visibilidad inmediatamente; su contenido no se cambia ni se borra. Si el proceso cae entre el envío y el borrado, puede haber otra entrega: los microservicios deben conservar su idempotencia. Una búsqueda limitada puede no encontrar la orden si hay muchos mensajes; informa el resultado y permite repetirla.
+
+Para recuperar una orden concreta después de resolver su causa:
+
+```powershell
+./infra/aws/recover-lab-purchase.ps1 -OrderId 'UUID_DE_LA_ORDEN'
+```
+
+La selección usa `ReceiveMessage`, `SendMessage` y `DeleteMessage`. El redrive nativo `StartMessageMoveTask` mueve mensajes sin permitir filtrarlos por orden; por eso no se usa para esta recuperación selectiva. [Documentación de AWS sobre redrive](https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/sqs-configure-dead-letter-queue-redrive.html).
+
+El script confirma el reenvío, no la emisión: consulta después la orden y sus tickets. La prueba completa espera `PAID/APPROVED`, exactamente un ticket y el mismo aforo reservado. Cancela su evento y cierra sesiones al terminar correctamente; conserva datos e informe sin contraseñas ni JWT en `.local/aws-dlq-smoke.json`.
+
+El bloque `finally` intenta restaurar el código también si la prueba falla. Si se cierra el proceso o se apaga el PC, vuelve a conectar la sesión del laboratorio y ejecuta:
+
+```powershell
+./infra/aws/test-lab-purchase-dlq.ps1 -Restore
+```
+
+La restauración rechaza un ZIP alterado o una versión de Lambda ajena a la prueba para evitar sobrescribir otro despliegue. No ejecutes publicaciones de Lambda durante esta prueba. Tras una interrupción, revisa la orden; si está en la DLQ, usa la recuperación selectiva. No se purgan colas ni se reenvían todos sus mensajes de forma indiscriminada.
+
+GitHub Actions ejecuta pruebas del fallo aislado y del recuperador con AWS simulado: cuenta incorrecta, selección del mensaje, conservación de atributos, confirmación antes del borrado y fallo de envío. La prueba real de veinticinco minutos se ejecuta manualmente en la sala y no forma parte del pipeline de cada commit.
 
 ### Publicar después de las pruebas
 

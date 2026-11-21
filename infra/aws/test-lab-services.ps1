@@ -99,7 +99,7 @@ try {
     @{ gateway = $gateway; checks = $checks; eventId = $eventId; orderId = $orderId;
         paymentExecuted = $false } | ConvertTo-Json -Depth 10 | Set-Content -LiteralPath (Join-Path $local 'aws-services-smoke.json')
     Write-Host 'OK: Gateway, sesión, roles, DynamoDB, comunicación Auth/Events/Orders, creación y cancelación de orden.'
-    Write-Host 'El pago y la emisión asíncrona se comprobarán al conectar Lambda con SQS.'
+    Write-Host 'Este script no ejecuta pagos. Usa test-lab-purchase.ps1 para comprobar pago y emisión asíncrona.'
 } finally {
     $adminPassword = $null
     if ($orderId -and -not $orderCancelled -and $customerToken) {

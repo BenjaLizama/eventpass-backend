@@ -15,6 +15,9 @@ function Invoke-ServiceAws([string[]] $Arguments, [string] $InputFile) {
 $identity = Invoke-ServiceAws -Arguments @('sts', 'get-caller-identity')
 if ($identity.Account -ne '119065066402') { throw 'Cuenta incorrecta. No se publicará nada.' }
 $local = Join-Path $PSScriptRoot '../../.local'
+if (@($Services | Select-Object -Unique).Count -lt 4) {
+    & (Join-Path $PSScriptRoot 'Sync-LabServiceState.ps1')
+}
 $dirty = & git -c safe.directory='*' status --porcelain -- $services
 if ($LASTEXITCODE -ne 0 -or $dirty) { throw 'Guarda los cambios de los microservicios en un commit antes de publicar imágenes.' }
 $revision = & git -c safe.directory='*' rev-parse HEAD

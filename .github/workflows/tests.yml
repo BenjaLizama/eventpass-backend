@@ -310,6 +310,7 @@ jobs:
         run: |
           ./infra/aws/test-lab-initialization.ps1
           ./infra/aws/test-lab-recovery.ps1
+          ./infra/aws/test-runner-adapter.ps1
       - name: Build private database verification image
         run: docker build -t eventpass-data-bootstrap:ci infra/aws/data-bootstrap
       - name: Build and test purchase Lambda Docker image
@@ -353,3 +354,4 @@ jobs:
       vars.AWS_DEPLOY_ENABLED == 'true' &&
       needs.e2e-tests.result == 'success' && needs.deployment-checks.result == 'success'
     uses: ./.github/workflows/deploy-aws.yml
+    secrets: inherit

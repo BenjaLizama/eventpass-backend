@@ -1,9 +1,8 @@
 #Requires -Version 7.0
 [CmdletBinding()]
-param()
+param([string] $AwsScript = (Join-Path $PSScriptRoot 'Invoke-LabAws.ps1'))
 $ErrorActionPreference = 'Stop'
 $local = Join-Path $PSScriptRoot '../../.local'
-$awsScript = Join-Path $PSScriptRoot 'Invoke-LabAws.ps1'
 $network = Get-Content -Raw -LiteralPath (Join-Path $local 'aws-network-outputs.json') | ConvertFrom-Json
 $gateway = ($network | Where-Object OutputKey -eq 'GatewayUrl').OutputValue.TrimEnd('/')
 if ($gateway -notmatch '^https://[a-z0-9]+\.execute-api\.us-east-1\.amazonaws\.com$') { throw 'Gateway inesperado.' }

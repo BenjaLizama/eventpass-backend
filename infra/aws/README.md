@@ -184,6 +184,29 @@ La restauración vuelve al digest original y rechaza una versión de Lambda ajen
 
 GitHub Actions ejecuta pruebas del fallo aislado y del recuperador con AWS simulado: cuenta incorrecta, selección del mensaje, conservación de atributos, confirmación antes del borrado y fallo de envío. La prueba real de veinticinco minutos se ejecuta manualmente en la sala y no forma parte del pipeline de cada commit.
 
+### Monitoreo y alarmas de CloudWatch
+
+```powershell
+./infra/aws/start-lab-monitoring.ps1
+./infra/aws/start-lab-monitoring.ps1 -Apply
+./infra/aws/test-lab-monitoring.ps1
+```
+
+El stack `eventpass-monitoring` crea el panel `eventpass-lab` y nueve alarmas. El primer comando prepara el change set; `-Apply` lo ejecuta y rechaza eliminaciones o reemplazos. El panel se abre en AWS → CloudWatch → Dashboards → `eventpass-lab`.
+
+| Alarma | Condición |
+| --- | --- |
+| `eventpass-purchase-dead-letter` | Al menos un mensaje visible o en revisión en la DLQ, en dos de tres muestras de un minuto. |
+| `eventpass-purchase-queue-age` | Mensaje de la cola pendiente con antigüedad superior a cinco minutos, en dos muestras de un minuto. |
+| `eventpass-lambda-errors` | Al menos un error del procesador en un minuto. |
+| `eventpass-lambda-duration` | Ejecución de al menos quince segundos; timeout actual de veinte. |
+| `eventpass-lambda-throttles` | Al menos una invocación limitada por concurrencia en un minuto. |
+| `eventpass-auth/events/orders/tickets-unavailable` | Menos de un destino sano del servicio durante dos minutos; la ausencia de métricas también se considera incidencia. |
+
+La alarma DLQ suma mensajes visibles y no visibles. Usa dos de tres muestras para tolerar una publicación retrasada cuando `FILL` completa valores ausentes. [Comportamiento de FILL en CloudWatch](https://docs.aws.amazon.com/AmazonCloudWatch/latest/monitoring/using-metric-math.html). Las métricas SQS son aproximadas y su antigüedad no equivale a contar las órdenes pendientes en SQL. [Métricas de SQS](https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/sqs-available-cloudwatch-metrics.html).
+
+Las alarmas tienen acciones externas deshabilitadas: muestran `OK`, `ALARM` o `INSUFFICIENT_DATA` en CloudWatch. No envían correo, no agregan SNS ni cambian la capacidad de los servicios. La prueba exige una DLQ vacía, introduce una sonda técnica que no es una compra, espera `OK → ALARM`, retira solo esa sonda y espera `OK` en las nueve alarmas. No usa `SetAlarmState` para simular el resultado. El informe queda en `.local/aws-monitoring-smoke.json`. Las alarmas y el panel pueden consumir crédito del laboratorio.
+
 ### Publicar después de las pruebas
 
 Cada cambio en `develop` ejecuta `Run tests`. Los runners de GitHub levantan sus propios contenedores de Floci y dependencias; sus recursos son temporales. El Floci del computador se actualiza al ejecutar de nuevo `start-local-purchase.ps1 -Build`. Un runner de GitHub no puede llegar al `localhost` del computador.
@@ -192,22 +215,43 @@ El job final `Deploy tested develop to Learner Lab` llama a `deploy-aws.yml` cua
 
 Antes de activarlo, deben existir los cinco repositorios ECR (cuatro servicios y procesador Lambda), el clúster y los cuatro servicios ECS, las dependencias, la función Lambda de imagen con su entorno/VPC y el vínculo de SQS habilitado con `BatchSize=1` apuntando a la función sin alias. El JSON `AWS_DEPLOY_CONFIG` incluye `purchaseRepository: "eventpass/purchase-lambda"` y `purchaseFunction: "eventpass-process-purchase-image"`. Los servicios usan ECS con circuit breaker y rollback y están conectados al ALB interno y al API Gateway. Este pipeline actualiza aplicaciones sobre esa infraestructura existente; no la aprovisiona.
 
-En GitHub, crea el Environment `aws-lab` y configura:
+La configuración actual usa Secrets y variables de repositorio. Esto permite configurarla como colaborador; los Secrets de un Environment de un repositorio personal requieren al propietario. El job identifica sus despliegues con el Environment `aws-lab`, que GitHub crea al usarlo si todavía no existe. Las protecciones que configure el propietario en ese Environment siguen aplicándose. El workflow reutilizable recibe los Secrets mediante `secrets: inherit`.
 
 | Tipo | Nombre | Contenido |
 | --- | --- | --- |
-| Variable del Environment | `AWS_DEPLOY_CONFIG` | JSON completo basado en `deploy-config.example.json`, con la cuenta y recursos reales. |
-| Variable del Environment | `AWS_TASK_CONFIG` | JSON completo basado en `task-config.example.json`, con roles, direcciones privadas y referencias ARN de secretos reales. Los digests de imágenes se reemplazan durante la publicación. |
-| Secret del Environment | `AWS_ACCESS_KEY_ID` | Access key temporal obtenida en AWS Details de la sesión de laboratorio. |
-| Secret del Environment | `AWS_SECRET_ACCESS_KEY` | Secret key temporal de esa misma sesión. |
-| Secret del Environment | `AWS_SESSION_TOKEN` | Session token temporal de esa misma sesión. |
+| Variable del repositorio | `AWS_DEPLOY_CONFIG` | JSON completo basado en `deploy-config.example.json`, con la cuenta y recursos reales. |
+| Variable del repositorio | `AWS_TASK_CONFIG` | JSON completo basado en `task-config.example.json`, con roles, direcciones privadas y referencias ARN de secretos reales. Los digests de imágenes se reemplazan durante la publicación. |
+| Secret del repositorio | `AWS_ACCESS_KEY_ID` | Access key temporal obtenida en AWS Details de la sesión de laboratorio. |
+| Secret del repositorio | `AWS_SECRET_ACCESS_KEY` | Secret key temporal de esa misma sesión. |
+| Secret del repositorio | `AWS_SESSION_TOKEN` | Session token temporal de esa misma sesión. |
 | Variable del repositorio | `AWS_DEPLOY_ENABLED` | `true` solo después de verificar la conexión y recursos de la sala. |
 
 No copies contraseñas ni tokens a los JSON o al repositorio. Las contraseñas de las aplicaciones se referencian por ARN; sus valores permanecen en Secrets Manager/SSM. Las credenciales de AWS Academy caducan y requieren renovar los tres Secrets cuando cambie la sesión. El inicio del laboratorio sigue siendo necesario. Si se dispone de un rol federado de GitHub mediante OIDC, puede sustituirse esta conexión temporal.
 
+Con GitHub CLI instalado, o su copia local verificada en `.local/tools/gh.exe`, ejecuta desde la raíz del proyecto:
+
+```powershell
+./infra/aws/connect-learner-lab.ps1
+./infra/aws/configure-github-lab.ps1 -EnableDeployment
+```
+
+El segundo comando verifica la cuenta AWS y los JSON locales, usa la sesión GitHub de Git Credential Manager y envía las credenciales a GitHub CLI por entrada estándar, sin escribir valores en archivos ni argumentos. GitHub CLI cifra los Secrets para el repositorio. Deshabilita temporalmente la publicación mientras reemplaza los tres valores y actualiza las dos variables de configuración; solo la habilita al terminar si recibió `-EnableDeployment`. Sin ese parámetro queda deshabilitada. No cambia los Secrets existentes de JWT o clientes internos. [GitHub CLI oficial](https://github.com/cli/cli/releases).
+
+Después de renovar la sesión del laboratorio, repite ambos comandos para actualizar también GitHub. Las credenciales cifradas del PC no se actualizan automáticamente en GitHub. Si el propietario configura Secrets del mismo nombre en `aws-lab`, estos tendrán prioridad y deberán mantenerse coherentes.
+
 `deploy-lab.mjs --check` valida las definiciones, la identidad, la existencia de ECR/ECS/Lambda, el vínculo SQS y una prueba del Gateway sin publicar imágenes ni actualizar aplicaciones. Requiere AWS CLI, Node y credenciales vigentes, además de `AWS_DEPLOY_CONFIG`, `AWS_TASK_CONFIG` y `DEPLOY_SHA` en el entorno. Comprueba recursos accesibles, pero no garantiza permisos de escritura como `iam:PassRole`; estos se ejercen al publicar.
 
 La ejecución completa comprueba que sigue desplegando el último commit de `develop`, construye las cinco imágenes Docker para Linux x86-64, las publica con una etiqueta que incluye el commit y un identificador de ejecución, y obtiene sus digests. Esto permite repetir el mismo commit con repositorios ECR de etiquetas inmutables. Genera y registra nuevas tareas, actualiza Lambda con `--image-uri`, cambia los servicios ECS y espera su estabilidad. Verifica también que ECS conserva la nueva definición: un rollback a la versión anterior hace fallar el job. Al terminar, prueba catálogo público, rechazo de órdenes sin sesión y bloqueo de la ruta interna de tokens por el Gateway.
+
+Después ejecuta las mismas pruebas autenticadas del laboratorio desde el runner: sesión, roles, revocación, creación/cancelación de orden, pago simulado, aforo lleno, devolución simulada, idempotencia y uso del ticket. `Invoke-RunnerAws.ps1` utiliza AWS CLI con las credenciales del job; no necesita el archivo cifrado de Windows. La preparación exige la cuenta correcta, Lambda de imagen activa y su vínculo a la cola de compras. Las pruebas crean datos identificables, cancelan los eventos al terminar y cierran sesiones. Un fallo en ellas marca el despliegue como fallido; no implica un rollback automático de los cinco componentes.
+
+Tras un despliegue de GitHub, puedes actualizar los identificadores locales antes de comprobar las tareas manualmente:
+
+```powershell
+./infra/aws/Sync-LabServiceState.ps1
+```
+
+La sincronización consulta las cuatro definiciones estables y sus imágenes actuales, valida red privada y cuenta, y actualiza solo los informes locales. No publica ni modifica servicios, y no certifica que esas versiones correspondan a un commit concreto. Las publicaciones manuales parciales y el arranque de Lambda la usan para conservar las versiones de servicios que pudo actualizar GitHub. Evita superponer publicaciones manuales con un despliegue en curso.
 
 La URL del Gateway, VPC Link, listener y target groups permanecen asociados a los servicios ECS: las tareas nuevas reciben tráfico a través del mismo acceso. Cambiar `routes.json`, la red, esquemas de secretos o la configuración de Lambda requiere actualizar la infraestructura correspondiente; este pipeline publica imágenes, variables de tareas y código de Lambda. Las variables y permisos de Lambda deben prepararse antes. El despliegue de los cuatro servicios y Lambda no es una transacción: sus contratos deben ser compatibles durante la actualización, y los cambios SQL deben permitir convivencia entre versiones. Para volver a una versión anterior se necesita una migración compatible y las definiciones/digests anteriores.
 

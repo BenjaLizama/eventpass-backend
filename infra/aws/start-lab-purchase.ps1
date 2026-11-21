@@ -19,7 +19,7 @@ $stateFile = Join-Path $local 'aws-dlq-test-state.json'
 if ((Test-Path -LiteralPath $stateFile) -and (Get-Content -Raw -LiteralPath $stateFile | ConvertFrom-Json).RestoreNeeded) {
     throw 'Hay una prueba DLQ sin restaurar. Restaurar antes de publicar.'
 }
-& (Join-Path $PSScriptRoot 'Wait-LabServices.ps1') -Attempts 2
+& (Join-Path $PSScriptRoot 'Sync-LabServiceState.ps1')
 $queue = Invoke-PurchaseAws -Arguments @('sqs','get-queue-url','--queue-name','eventpass-purchase-pending')
 $attributes = (Invoke-PurchaseAws -Arguments @('sqs','get-queue-attributes','--queue-url',$queue.QueueUrl,'--attribute-names','All')).Attributes
 $queueFile = Save-PurchaseRequest $attributes 'purchase-queue-attributes.json'

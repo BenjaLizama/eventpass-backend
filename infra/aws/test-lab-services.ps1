@@ -1,9 +1,8 @@
 #Requires -Version 7.0
 [CmdletBinding()]
-param()
+param([string] $AwsScript = (Join-Path $PSScriptRoot 'Invoke-LabAws.ps1'))
 
 $ErrorActionPreference = 'Stop'
-$awsScript = Join-Path $PSScriptRoot 'Invoke-LabAws.ps1'
 $local = Join-Path $PSScriptRoot '../../.local'
 $network = Get-Content -Raw -LiteralPath (Join-Path $local 'aws-network-outputs.json') | ConvertFrom-Json
 $gateway = ($network | Where-Object OutputKey -eq 'GatewayUrl').OutputValue.TrimEnd('/')

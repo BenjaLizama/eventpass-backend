@@ -50,3 +50,11 @@ jobs:
         run: node infra/aws/deploy-lab.mjs --check
       - name: Publish images and update ECS and purchase Lambda
         run: node infra/aws/deploy-lab.mjs
+      - name: Prepare authenticated post-deployment checks
+        run: node infra/aws/prepare-runner-smoke.mjs
+      - name: Verify sessions, roles, purchases and tickets in AWS
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          ./infra/aws/test-lab-services.ps1 -AwsScript ./infra/aws/Invoke-RunnerAws.ps1
+          ./infra/aws/test-lab-purchase.ps1 -AwsScript ./infra/aws/Invoke-RunnerAws.ps1

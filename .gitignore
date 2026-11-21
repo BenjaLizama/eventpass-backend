@@ -11,6 +11,7 @@
 
 # Archivos de entorno y secretos local
 .env
+/.local/
 
 # Archivos subidos o temporales
 /uploads/

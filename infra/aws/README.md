@@ -34,6 +34,53 @@ La primera validación en AWS consiste en publicar una imagen y arrancar una tar
 
 ## Pipeline de pruebas y publicación
 
+### Conectar el computador a la sala
+
+La cuenta de laboratorio confirmada es `119065066402`, en `us-east-1`. Para entrar a la consola usa AWS Academy → Start Lab → botón AWS. No necesitas una contraseña del ID de cuenta. En AWS Details → AWS CLI aparecen las credenciales temporales `aws_access_key_id`, `aws_secret_access_key` y `aws_session_token`.
+
+Con Docker Desktop abierto, ejecuta en PowerShell 7:
+
+```powershell
+./infra/aws/connect-learner-lab.ps1
+```
+
+Introduce solo el valor de cada campo en las tres entradas ocultas. El asistente usa la imagen oficial de AWS CLI en Docker; guarda las credenciales cifradas con el usuario de Windows en `.local/aws-lab-session.xml`, ignorado por Git, y verifica la identidad. No publiques ese archivo ni copies las claves al chat. Al caducar la sesión, repite el asistente.
+
+Después puedes consultar AWS sin instalar la CLI en Windows:
+
+```powershell
+./infra/aws/Invoke-LabAws.ps1 -AwsArguments @('sts', 'get-caller-identity', '--output', 'json')
+./infra/aws/initialize-lab.ps1 -WhatIf
+./infra/aws/initialize-lab.ps1
+```
+
+La inicialización reutiliza los repositorios existentes y completa ECR, los logs de ECS con retención de siete días, cinco colas SQS, la tabla DynamoDB de Tickets y el clúster Fargate vacío. Configura cinco intentos, visibilidad de 120 segundos y retención de errores de catorce días. Guarda un inventario local sin claves. No inicia tareas, bases SQL, Redis, NAT ni balanceadores. Esos recursos y la red se preparan después de verificar permisos y conectividad de la sala. Requiere el rol existente `LabRole`; no crea roles IAM.
+
+### Red privada de la sala
+
+```powershell
+./infra/aws/start-lab-network.ps1
+./infra/aws/start-lab-network.ps1 -Apply
+```
+
+El primer comando genera y valida la plantilla y prepara un change set de CloudFormation. El segundo prepara y ejecuta el plan; rechaza eliminaciones o reemplazos. El stack `eventpass-network` reúne una VPC propia `10.42.0.0/16`, dos subredes públicas, dos privadas de aplicación y dos privadas de datos en dos zonas. Las de aplicación tienen salida por un NAT; las de datos no tienen ruta por defecto a Internet. Ninguna subred asigna IP pública automáticamente. S3 y DynamoDB tienen gateway endpoints.
+
+API Gateway tiene únicamente las rutas de `infra/gateway/routes.json`. La integración conserva el path y accede por VPC Link al listener 80 de un ALB interno. Cada servicio tiene su target group de tipo `ip` y health check `/actuator/health`. Los listeners internos 8081–8084 permiten a ECS y Lambda llamar al servicio correspondiente mediante las URL de los outputs `AuthServiceUrl`, `EventsServiceUrl`, `OrdersServiceUrl` y `TicketsServiceUrl`. Sus grupos de seguridad aceptan esos puertos solo desde las aplicaciones y Lambda; el VPC Link accede únicamente al puerto 80.
+
+Esta cuenta permite listar Cloud Map, pero denegó `servicediscovery:CreatePrivateDnsNamespace`. Por eso se usan las URL privadas estables del ALB para las variables `*_SERVICE_URL`. No se crean espacios Cloud Map ni roles IAM. Las aplicaciones siguen validando los tokens y sesiones; el authorizer del Gateway continúa pendiente.
+
+El NAT y el ALB generan cargos mientras existan. La red de laboratorio usa un solo NAT y no tiene tolerancia a fallos de NAT entre zonas. Los outputs reales se guardan en `.local/aws-network-outputs.json`. Crear esta red no despliega las aplicaciones: faltan bases SQL, Redis, secretos, imágenes, tareas, Lambda y su vínculo SQS. Las pruebas funcionales completas por esta URL se ejecutan cuando existan targets sanos.
+
+```powershell
+./infra/aws/test-lab-network.ps1
+# Después de desplegar las tareas y sus dependencias:
+./infra/aws/test-lab-network.ps1 -ServicesReady
+```
+
+La primera prueba comprueba los recursos reales: VPC Link disponible, ALB interno, rutas públicas exactas, subredes privadas, salida de aplicación por NAT y ausencia de ingreso abierto en grupos de seguridad. También comprueba que las rutas internas y Actuator devuelven 404 por el Gateway. Antes de arrancar ECS, el catálogo devuelve 503 por falta de targets; eso comprueba el recorrido hasta el balanceador, no el funcionamiento del catálogo. Con `-ServicesReady` se exige HTTP 200.
+
+### Publicar después de las pruebas
+
 Cada cambio en `develop` ejecuta `Run tests`. Los runners de GitHub levantan sus propios contenedores de Floci y dependencias; sus recursos son temporales. El Floci del computador se actualiza al ejecutar de nuevo `start-local-purchase.ps1 -Build`. Un runner de GitHub no puede llegar al `localhost` del computador.
 
 El job final `Deploy tested develop to Learner Lab` llama a `deploy-aws.yml` cuando las pruebas E2E y de producción pasan y la variable de repositorio `AWS_DEPLOY_ENABLED` vale exactamente `true`. Los errores de otros jobs también impiden publicar. Los pull requests nunca ejecutan el despliegue. Sin esa variable, el despliegue queda omitido y las pruebas siguen funcionando.

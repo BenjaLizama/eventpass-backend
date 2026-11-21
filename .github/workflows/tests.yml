@@ -305,6 +305,9 @@ jobs:
               and (.containerDefinitions[0].environment | all(.name != "JWT_SECRET"))
             ' "$RUNNER_TEMP/eventpass-tasks/ms-$service.json"
           done
+      - name: Test lab initialization without AWS credentials
+        shell: pwsh
+        run: ./infra/aws/test-lab-initialization.ps1
       - name: Start with empty databases and DynamoDB Local
         run: |
           cp .env.example .env

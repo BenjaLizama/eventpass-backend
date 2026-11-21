@@ -28,9 +28,14 @@ public class CurrentUserIdArgumentResolver implements HandlerMethodArgumentResol
             WebDataBinderFactory binderFactory) {
 
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        if (authentication == null || authentication.getName() == null) {
-            return null;
+        if (authentication == null || !authentication.isAuthenticated()
+                || authentication instanceof org.springframework.security.authentication.AnonymousAuthenticationToken) {
+            throw new org.springframework.security.access.AccessDeniedException("Se requiere una identidad de usuario.");
         }
-        return UUID.fromString(authentication.getName());
+        try {
+            return UUID.fromString(authentication.getName());
+        } catch (IllegalArgumentException invalid) {
+            throw new org.springframework.security.access.AccessDeniedException("Se requiere una identidad de usuario válida.");
+        }
     }
 }

@@ -9,7 +9,7 @@ import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.DisabledException;
 import org.springframework.security.authentication.LockedException;
-import org.springframework.security.authorization.AuthorizationDeniedException;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -206,9 +206,9 @@ public class GlobalExceptionHandler {
         );
     }
 
-    @ExceptionHandler(AuthorizationDeniedException.class)
+    @ExceptionHandler(AccessDeniedException.class)
     public ResponseEntity<StandardErrorResponse> handleAuthorizationDenied(
-            AuthorizationDeniedException ex,
+            AccessDeniedException ex,
             HttpServletRequest request) {
 
         return buildErrorResponse(
@@ -250,9 +250,7 @@ public class GlobalExceptionHandler {
                 .code(code)
                 .error(status.getReasonPhrase())
                 .message(message)
-                .developerMessage(
-                        ex.getClass().getName() + ": " + ex.getLocalizedMessage()
-                )
+                .developerMessage(null)
                 .path(request.getRequestURI())
                 .timestamp(System.currentTimeMillis())
                 .validationError(validationErrors)

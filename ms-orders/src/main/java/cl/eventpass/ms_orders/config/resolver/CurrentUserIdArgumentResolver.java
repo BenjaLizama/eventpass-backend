@@ -28,26 +28,15 @@ public class CurrentUserIdArgumentResolver
             @Nonnull NativeWebRequest webRequest,
             WebDataBinderFactory binderFactory
     ) {
-        Authentication authentication =
-                SecurityContextHolder.getContext().getAuthentication();
-
-        if (authentication == null
-                || !authentication.isAuthenticated()
-                || authentication.getPrincipal() == null) {
-            throw new IllegalStateException(
-                    "No se encontró un usuario autenticado."
-            );
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null || !authentication.isAuthenticated()
+                || authentication instanceof org.springframework.security.authentication.AnonymousAuthenticationToken) {
+            throw new org.springframework.security.access.AccessDeniedException("Se requiere una identidad de usuario.");
         }
-
-        String principal = authentication.getPrincipal().toString();
-
         try {
-            return UUID.fromString(principal);
-        } catch (IllegalArgumentException exception) {
-            throw new IllegalStateException(
-                    "El identificador del usuario autenticado no es un UUID válido.",
-                    exception
-            );
+            return UUID.fromString(authentication.getName());
+        } catch (IllegalArgumentException invalid) {
+            throw new org.springframework.security.access.AccessDeniedException("Se requiere una identidad de usuario válida.");
         }
     }
 }

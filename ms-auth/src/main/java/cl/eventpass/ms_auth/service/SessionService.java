@@ -6,6 +6,7 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 
 import java.time.Duration;
+import org.springframework.data.redis.core.ScanOptions;
 
 @Service
 @RequiredArgsConstructor
@@ -47,5 +48,18 @@ public class SessionService {
         redisTemplate.delete(
                 SESSION_PREFIX + sessionId
         );
+    }
+
+    public void revokeUserSessions(String username) {
+        // SCAN is bounded per batch; unlike KEYS it does not block the Redis keyspace.
+        try (var cursor = redisTemplate.scan(ScanOptions.scanOptions()
+                .match(SESSION_PREFIX + "*").count(250).build())) {
+            while (cursor.hasNext()) {
+                String key = cursor.next();
+                if (username.equals(redisTemplate.opsForValue().get(key))) {
+                    redisTemplate.delete(key);
+                }
+            }
+        }
     }
 }

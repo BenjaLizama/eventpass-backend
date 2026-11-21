@@ -77,6 +77,7 @@ public class JwtService {
             String sessionId
     ) {
         Map<String, Object> extraClaims = new HashMap<>();
+        extraClaims.put("tokenType", "ACCESS");
 
         extraClaims.put(
                 "authorities",
@@ -109,6 +110,7 @@ public class JwtService {
             String sessionId
     ) {
         Map<String, Object> extraClaims = new HashMap<>();
+        extraClaims.put("tokenType", "REFRESH");
 
         extraClaims.put(
                 "userId",
@@ -202,13 +204,20 @@ public class JwtService {
         final String sessionId = extractSessionId(token);
 
         return username.equals(userDetails.getUsername())
+                && userDetails.isEnabled() && userDetails.isAccountNonLocked()
+                && jti != null && !jti.isBlank()
                 && !isTokenExpired(token)
                 && !tokenBlacklistService.isBlacklisted(jti)
                 && sessionService.isSessionActive(sessionId);
     }
 
     public boolean isTokenExpired(String token) {
-        return extractExpiration(token).before(new Date());
+        Date expiration = extractExpiration(token);
+        return expiration == null || expiration.before(new Date());
+    }
+
+    public boolean hasTokenType(String token, String expected) {
+        return expected.equals(extractClaim(token, claims -> claims.get("tokenType", String.class)));
     }
 
     private Claims extractAllClaims(String token) {

@@ -77,6 +77,7 @@ public class EventServiceImpl implements EventService {
     public EventResponse getEventById(UUID id) {
         EventEntity event = eventRepository.findActiveByIdWithDetails(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Evento no encontrado con ID: " + id));
+        cl.eventpass.ms_events.config.EventVisibility.requireVisible(event);
         return eventMapper.toResponse(event);
     }
 

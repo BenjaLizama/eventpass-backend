@@ -27,6 +27,7 @@ public class AdminService {
 
     private final CredentialRepository credentialRepository;
     private final PasswordEncoder passwordEncoder;
+    private final SessionService sessionService;
 
     @Transactional
     public UserResponse createAdmin(CreateUserRequest request) {
@@ -75,6 +76,7 @@ public class AdminService {
 
         if (request.email() != null &&
                 !request.email().equals(credential.getEmail())) {
+            sessionService.revokeUserSessions(credential.getEmail());
 
             credentialRepository.findByEmail(request.email())
                     .ifPresent(existing -> {
@@ -87,6 +89,10 @@ public class AdminService {
         }
 
         if (request.role() != null) {
+            if (request.role() == Role.INTERNAL_SERVICE) {
+                throw new InvalidRequestException("El rol de servicio no puede asignarse a usuarios.");
+            }
+            sessionService.revokeUserSessions(credential.getEmail());
             credential.setRole(request.role());
         }
 
@@ -110,6 +116,7 @@ public class AdminService {
                         );
 
         credential.setStatus(request.status());
+        sessionService.revokeUserSessions(credential.getEmail());
 
         CredentialEntity updatedCredential =
                 credentialRepository.save(credential);
@@ -123,6 +130,7 @@ public class AdminService {
                 .orElseThrow(() -> new ResourceNotFoundException("No se encontró el usuario solicitado."));
 
         credential.setDeletedAt(Instant.now());
+        sessionService.revokeUserSessions(credential.getEmail());
         credentialRepository.save(credential);
     }
 

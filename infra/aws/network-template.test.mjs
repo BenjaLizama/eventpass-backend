@@ -45,3 +45,22 @@ test('rejects a wildcard or internal token route', () => {
     assert.throws(() => buildNetworkTemplate(changed), /no permitida/);
   }
 });
+
+test('authorizer has no cache, scoped invoke permission and explicit protection per route', () => {
+  const policy = JSON.parse(readFileSync(new URL('../gateway-authorizer/src/main/resources/route-policy.json', import.meta.url)));
+  const { Resources: r } = buildNetworkTemplate(routes);
+  assert.deepEqual(Object.keys(policy).sort(), Object.values(routes).flat().sort());
+  assert.equal(r.GatewayAuthorizer.Properties.AuthorizerResultTtlInSeconds, 0);
+  assert.deepEqual(r.GatewayAuthorizer.Properties.IdentitySource, ['$request.header.Authorization']);
+  assert.deepEqual(r.GatewayAuthorizerPermission.Properties.SourceAccount, { Ref: 'AWS::AccountId' });
+  assert.match(r.GatewayAuthorizerPermission.Properties.SourceArn['Fn::Sub'], /authorizers\/\$\{GatewayAuthorizer\}/);
+  for (const route of Object.values(r).filter(x => x.Type === 'AWS::ApiGatewayV2::Route')) {
+    const protectedRoute = !policy[route.Properties.RouteKey].includes('PUBLIC');
+    assert.equal(Boolean(route.Properties.AuthorizerId), protectedRoute);
+  }
+  assert.deepEqual(policy['POST /api/v1/events'], ['ADMIN','ORGANIZER']);
+  assert.deepEqual(policy['PATCH /api/v1/tickets/{ticketCode}/use'], ['STAFF']);
+  assert.equal(r.AuthorizerToAuth.Properties.FromPort,8081);
+  assert.equal(r.AuthorizerToAuthEgress.Properties.ToPort,8081);
+  assert.ok(!r.AuthorizerSecurityGroup.Properties.SecurityGroupEgress.some(x=>x.CidrIp==='0.0.0.0/0'));
+});

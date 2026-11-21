@@ -23,11 +23,7 @@ public class ExceptionResponseMapper {
                 .code(code)
                 .error(status.getReasonPhrase())
                 .message(message)
-                .developerMessage(
-                        exception.getClass().getName()
-                                + ": "
-                                + exception.getLocalizedMessage()
-                )
+                .developerMessage(null)
                 .path(request.getRequestURI())
                 .timestamp(System.currentTimeMillis())
                 .validationError(validationErrors)

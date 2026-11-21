@@ -175,4 +175,20 @@ class SessionServiceTest {
         // Assert
         verifyNoInteractions(redisTemplate);
     }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void revokingOneUserPreservesOtherUsersSessions() {
+        org.springframework.data.redis.core.Cursor<String> cursor = mock(org.springframework.data.redis.core.Cursor.class);
+        when(redisTemplate.scan(any())).thenReturn(cursor);
+        when(cursor.hasNext()).thenReturn(true, true, false);
+        when(cursor.next()).thenReturn("jwt:session:owner", "jwt:session:other");
+        when(redisTemplate.opsForValue()).thenReturn(valueOperations);
+        when(valueOperations.get("jwt:session:owner")).thenReturn("owner@example.com");
+        when(valueOperations.get("jwt:session:other")).thenReturn("other@example.com");
+        sessionService.revokeUserSessions("owner@example.com");
+        verify(redisTemplate).delete("jwt:session:owner");
+        verify(redisTemplate, never()).delete("jwt:session:other");
+        verify(cursor).close();
+    }
 }

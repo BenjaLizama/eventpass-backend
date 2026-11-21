@@ -24,7 +24,7 @@ public class ExceptionResponseMapper {
                 .code(code)
                 .error(status.getReasonPhrase())
                 .message(message)
-                .developerMessage(exception.getMessage())
+                .developerMessage(null)
                 .path(request.getRequestURI())
                 .timestamp(Instant.now().toEpochMilli())
                 .validationError(validationErrors)

@@ -53,6 +53,14 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
         try {
             Claims claims = extractAllClaims(jwt);
+            String purpose = claims.get("tokenType", String.class);
+            if ((!"ACCESS".equals(purpose) && !"SERVICE".equals(purpose))
+                    || claims.getExpiration() == null || claims.getIssuedAt() == null
+                    || claims.getId() == null || claims.getId().isBlank()) {
+                response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+                return;
+            }
+
 
             String userId = claims.get("userId", String.class);
 

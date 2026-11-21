@@ -299,7 +299,7 @@ class OrderPaymentRejectedE2ETest {
 
         Instant now = Instant.now();
 
-        return Jwts.builder()
+        return Jwts.builder().claim("tokenType", "ACCESS").id(UUID.randomUUID().toString())
                 .subject(userId.toString())
                 .claim("userId", userId.toString())
                 .claim("authorities", List.of("ROLE_CUSTOMER"))

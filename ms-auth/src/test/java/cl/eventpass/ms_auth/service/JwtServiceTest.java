@@ -225,4 +225,22 @@ class JwtServiceTest {
                 () -> jwtService.isTokenExpired(expiredToken)
         );
     }
+
+    @Test
+    void accessAndRefreshAreDifferentTokenPurposes() {
+        String access = jwtService.generateToken(userDetails, userId, sessionId);
+        String refresh = jwtService.generateRefreshToken(userDetails, userId, sessionId);
+        assertTrue(jwtService.hasTokenType(access, "ACCESS"));
+        assertFalse(jwtService.hasTokenType(refresh, "ACCESS"));
+        assertTrue(jwtService.hasTokenType(refresh, "REFRESH"));
+        assertFalse(jwtService.hasTokenType(access, "REFRESH"));
+    }
+
+    @Test
+    void blockedUserCannotUseAnOtherwiseValidToken() {
+        String access = jwtService.generateToken(userDetails, userId, sessionId);
+        UserDetails blocked = User.withUsername(userDetails.getUsername()).password("x")
+                .authorities("ROLE_CUSTOMER").disabled(true).build();
+        assertFalse(jwtService.isTokenValid(access, blocked));
+    }
 }

@@ -43,6 +43,10 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         jwt = authHeader.substring(7);
 
         try {
+            if (!jwtService.hasTokenType(jwt, "ACCESS")) {
+                filterChain.doFilter(request, response);
+                return;
+            }
             userEmail = jwtService.extractUsername(jwt);
 
             if (userEmail != null
@@ -84,9 +88,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             }
 
         } catch (Exception e) {
-            logger.error(
-                    "Error al procesar el token JWT: " + e.getMessage()
-            );
+            logger.debug("JWT rechazado; no se autentica la petición.");
         }
 
         filterChain.doFilter(request, response);

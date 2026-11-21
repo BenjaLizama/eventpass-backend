@@ -1,0 +1,89 @@
+{
+  "POST /api/v1/auth/register": [
+    "PUBLIC"
+  ],
+  "POST /api/v1/auth/login": [
+    "PUBLIC"
+  ],
+  "POST /api/v1/auth/refresh": [
+    "PUBLIC"
+  ],
+  "POST /api/v1/auth/logout": [
+    "AUTHENTICATED"
+  ],
+  "GET /api/v1/auth/me": [
+    "AUTHENTICATED"
+  ],
+  "PATCH /api/v1/auth/me": [
+    "AUTHENTICATED"
+  ],
+  "POST /api/v1/admin/users/staff": [
+    "ADMIN"
+  ],
+  "POST /api/v1/admin/users/organizer": [
+    "ADMIN"
+  ],
+  "GET /api/v1/events": [
+    "PUBLIC"
+  ],
+  "POST /api/v1/events": [
+    "ADMIN",
+    "ORGANIZER"
+  ],
+  "GET /api/v1/events/my-events": [
+    "ADMIN",
+    "ORGANIZER"
+  ],
+  "GET /api/v1/events/{id}": [
+    "PUBLIC"
+  ],
+  "GET /api/v1/events/{eventId}/ticket-categories/{ticketCategoryId}": [
+    "PUBLIC"
+  ],
+  "PUT /api/v1/events/{id}": [
+    "ADMIN",
+    "ORGANIZER"
+  ],
+  "PATCH /api/v1/events/{id}/publish": [
+    "ADMIN",
+    "ORGANIZER"
+  ],
+  "PATCH /api/v1/events/{id}/cancel": [
+    "ADMIN",
+    "ORGANIZER"
+  ],
+  "GET /api/v1/venues": [
+    "PUBLIC"
+  ],
+  "POST /api/v1/venues": [
+    "ADMIN",
+    "ORGANIZER"
+  ],
+  "GET /api/v1/venues/{id}": [
+    "PUBLIC"
+  ],
+  "POST /api/v1/orders": [
+    "CUSTOMER"
+  ],
+  "GET /api/v1/orders/my-orders": [
+    "CUSTOMER"
+  ],
+  "GET /api/v1/orders/{id}": [
+    "CUSTOMER"
+  ],
+  "PATCH /api/v1/orders/{id}/cancel": [
+    "CUSTOMER"
+  ],
+  "POST /api/v1/orders/{id}/payment": [
+    "CUSTOMER"
+  ],
+  "GET /api/v1/tickets/me": [
+    "CUSTOMER"
+  ],
+  "GET /api/v1/tickets/{ticketCode}": [
+    "CUSTOMER"
+  ],
+  "PATCH /api/v1/tickets/{ticketCode}/use": [
+    "STAFF"
+  ]
+}

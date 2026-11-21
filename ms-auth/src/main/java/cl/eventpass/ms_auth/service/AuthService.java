@@ -73,6 +73,7 @@ public class AuthService {
                         );
                     });
 
+            sessionService.revokeUserSessions(credential.getEmail());
             credential.setEmail(request.email());
 
             sessionService.revokeSession(sessionId);
@@ -133,6 +134,9 @@ public class AuthService {
         String userEmail;
 
         try {
+            if (!jwtService.hasTokenType(refreshToken, "REFRESH")) {
+                throw new InvalidTokenException("Se requiere un token de renovación.");
+            }
             userEmail = jwtService.extractUsername(refreshToken);
         } catch (Exception ex) {
             throw new InvalidTokenException(

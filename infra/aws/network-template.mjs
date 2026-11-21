@@ -7,6 +7,7 @@ const attr = (name, field) => ({ 'Fn::GetAtt': [name, field] });
 const sub = value => ({ 'Fn::Sub': value });
 
 export function buildNetworkTemplate(routes) {
+  const routePolicy = JSON.parse(readFileSync(new URL('../gateway-authorizer/src/main/resources/route-policy.json', import.meta.url)));
   const resources = {};
   const outputs = {};
   const add = (id, Type, Properties, extra = {}) => { resources[id] = { Type, Properties, ...extra }; };
@@ -39,7 +40,7 @@ export function buildNetworkTemplate(routes) {
   });
 
   // Separate rules avoid circular dependencies between the security groups.
-  for (const name of ['VpcLink', 'Balancer', 'App', 'Purchase', 'Data']) add(name + 'SecurityGroup', 'AWS::EC2::SecurityGroup', {
+  for (const name of ['VpcLink', 'Balancer', 'App', 'Purchase', 'Authorizer', 'Data']) add(name + 'SecurityGroup', 'AWS::EC2::SecurityGroup', {
     GroupDescription: 'EventPass ' + name, VpcId: ref('Vpc'), Tags: tag('eventpass-' + name.toLowerCase()),
     SecurityGroupEgress: name === 'App' || name === 'Purchase'
       ? [{ IpProtocol: '-1', CidrIp: '0.0.0.0/0' }]
@@ -110,22 +111,43 @@ export function buildNetworkTemplate(routes) {
     IntegrationUri: ref('Listener'), ConnectionType: 'VPC_LINK', ConnectionId: ref('VpcLink'),
     PayloadFormatVersion: '1.0', RequestParameters: { 'overwrite:path': '$request.path' }
   });
+  add('GatewayAuthorizer', 'AWS::ApiGatewayV2::Authorizer', {
+    ApiId: ref('Api'), Name: 'eventpass-session-and-role', AuthorizerType: 'REQUEST',
+    AuthorizerPayloadFormatVersion: '2.0', EnableSimpleResponses: true,
+    AuthorizerResultTtlInSeconds: 0, IdentitySource: ['$request.header.Authorization'],
+    AuthorizerUri: sub('arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${GatewayAuthorizerArn}/invocations')
+  }, { Condition: 'HasGatewayAuthorizer' });
+  add('GatewayAuthorizerPermission', 'AWS::Lambda::Permission', {
+    FunctionName: ref('GatewayAuthorizerArn'), Action: 'lambda:InvokeFunction', Principal: 'apigateway.amazonaws.com',
+    SourceAccount: ref('AWS::AccountId'),
+    SourceArn: sub('arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${Api}/authorizers/${GatewayAuthorizer}')
+  }, { Condition: 'HasGatewayAuthorizer' });
+  ingress('AuthorizerToAuth', 'Balancer', 'Authorizer', 8081);
+  egress('AuthorizerToAuthEgress', 'Authorizer', 'Balancer', 8081);
   const routeKeys = Object.values(routes).flat();
   if (new Set(routeKeys).size !== routeKeys.length) throw new Error('Rutas de Gateway duplicadas.');
   for (const [index, route] of routeKeys.entries()) {
     if (!/^(GET|POST|PUT|PATCH|DELETE) \/api\/v1\//.test(route) || /\*|\{proxy\+\}|service-token|\/internal\/|\/reservations(?:\/|$)|\/(?:reserve|release)(?:\/|$)/.test(route)) {
       throw new Error('Ruta pública no permitida: ' + route);
     }
-    add('Route' + index, 'AWS::ApiGatewayV2::Route', { ApiId: ref('Api'), RouteKey: route, Target: { 'Fn::Join': ['/', ['integrations', ref('Integration')]] } });
+    if (!Array.isArray(routePolicy[route]) || !routePolicy[route].length) throw new Error('Falta política explícita de ruta: ' + route);
+    const authorization = routePolicy[route].includes('PUBLIC') ? { AuthorizationType: 'NONE' } : {
+      AuthorizationType: { 'Fn::If': ['HasGatewayAuthorizer', 'CUSTOM', 'NONE'] },
+      AuthorizerId: { 'Fn::If': ['HasGatewayAuthorizer', ref('GatewayAuthorizer'), ref('AWS::NoValue')] }
+    };
+    add('Route' + index, 'AWS::ApiGatewayV2::Route', { ApiId: ref('Api'), RouteKey: route, ...authorization,
+      Target: { 'Fn::Join': ['/', ['integrations', ref('Integration')]] } });
   }
   add('Stage', 'AWS::ApiGatewayV2::Stage', { ApiId: ref('Api'), StageName: '$default', AutoDeploy: true,
     DefaultRouteSettings: { ThrottlingBurstLimit: 100, ThrottlingRateLimit: 50 } });
   for (const name of ['Vpc', 'AppA', 'AppB', 'DataA', 'DataB', 'DatabaseSubnets', 'CacheSubnets',
-    'AppSecurityGroup', 'PurchaseSecurityGroup', 'DataSecurityGroup', 'Listener', 'VpcLink', 'Api']) output(name, ref(name));
+    'AppSecurityGroup', 'PurchaseSecurityGroup', 'AuthorizerSecurityGroup', 'DataSecurityGroup', 'Listener', 'VpcLink', 'Api']) output(name, ref(name));
   output('GatewayUrl', attr('Api', 'ApiEndpoint'));
   return {
     AWSTemplateFormatVersion: '2010-09-09', Description: 'EventPass Learner Lab private network and HTTP API',
-    Parameters: { ZoneA: { Type: 'AWS::EC2::AvailabilityZone::Name', Default: 'us-east-1a' },
+    Conditions: { HasGatewayAuthorizer: { 'Fn::Not': [{ 'Fn::Equals': [ref('GatewayAuthorizerArn'), ''] }] } },
+    Parameters: { GatewayAuthorizerArn: { Type: 'String', Default: '', AllowedPattern: '^$|^arn:aws:lambda:us-east-1:119065066402:function:eventpass-gateway-authorizer$' },
+      ZoneA: { Type: 'AWS::EC2::AvailabilityZone::Name', Default: 'us-east-1a' },
       ZoneB: { Type: 'AWS::EC2::AvailabilityZone::Name', Default: 'us-east-1b' } },
     Rules: { DifferentZones: { Assertions: [{ Assert: { 'Fn::Not': [{ 'Fn::Equals': [ref('ZoneA'), ref('ZoneB')] }] }, AssertDescription: 'Two availability zones are required.' }] } },
     Resources: resources, Outputs: outputs

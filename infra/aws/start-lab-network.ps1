@@ -22,8 +22,11 @@ if ($stack -and $stack.Status -notin @('CREATE_COMPLETE','UPDATE_COMPLETE','REVI
 }
 $type = if (-not $stack -or $stack.Status -eq 'REVIEW_IN_PROGRESS') { 'CREATE' } else { 'UPDATE' }
 $changeName = 'eventpass-' + [guid]::NewGuid().ToString('N')
+$authorizer = Invoke-NetworkAws -Arguments @('lambda', 'list-functions', '--query', "Functions[?FunctionName=='eventpass-gateway-authorizer'].FunctionArn | [0]")
+$authorizerArn = if ($authorizer) { [string]$authorizer } else { '' }
 $change = Invoke-NetworkAws -Arguments @('cloudformation', 'create-change-set', '--stack-name', 'eventpass-network',
     '--change-set-name', $changeName, '--change-set-type', $type, '--template-body', 'file:///input/request.json',
+    '--parameters', "ParameterKey=GatewayAuthorizerArn,ParameterValue=$authorizerArn",
     '--tags', 'Key=Project,Value=eventpass') -InputFile $template
 try {
     Invoke-NetworkAws -Arguments @('cloudformation', 'wait', 'change-set-create-complete', '--change-set-name', $change.Id) | Out-Null

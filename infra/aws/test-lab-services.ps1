@@ -9,14 +9,14 @@ $gateway = ($network | Where-Object OutputKey -eq 'GatewayUrl').OutputValue.Trim
 $settings = Get-Content -Raw -LiteralPath (Join-Path $local 'aws-task-config.json') | ConvertFrom-Json
 if ($gateway -notmatch '^https://[a-z0-9]+\.execute-api\.us-east-1\.amazonaws\.com$') { throw 'Gateway inesperado.' }
 $checks = [Collections.Generic.List[object]]::new()
-function Invoke-Probe([string] $Method, [string] $Path, [int] $Expected, $Body = $null, [string] $Token = '') {
+function Invoke-Probe([string] $Method, [string] $Path, [int[]] $Expected, $Body = $null, [string] $Token = '') {
     $parameters = @{ Uri = $gateway + $Path; Method = $Method; SkipHttpErrorCheck = $true;
         TimeoutSec = 30; MaximumRedirection = 0; Headers = @{} }
     if ($Token) { $parameters.Headers.Authorization = 'Bearer ' + $Token }
     if ($null -ne $Body) { $parameters.Body = $Body | ConvertTo-Json -Depth 12 -Compress; $parameters.ContentType = 'application/json' }
     $response = Invoke-WebRequest @parameters
     $checks.Add(@{ Method = $Method; Path = $Path; Status = [int]$response.StatusCode; Expected = $Expected })
-    if ([int]$response.StatusCode -ne $Expected) {
+    if ([int]$response.StatusCode -notin $Expected) {
         # Do not print request bodies, JWTs, passwords or full responses.
         throw "$Method $Path respondió HTTP $($response.StatusCode); se esperaba $Expected."
     }
@@ -63,6 +63,16 @@ try {
     $password = $null
     $customerToken = $login.access_token
     $refreshToken = $login.refresh_token
+    foreach ($protected in @('/api/v1/auth/me','/api/v1/orders/my-orders','/api/v1/tickets/me','/api/v1/events/my-events')) {
+        Invoke-Probe 'GET' $protected @(401,403) $null $refreshToken | Out-Null
+    }
+    Invoke-Probe 'POST' '/api/v1/auth/refresh' @(400,401,403) @{ refreshToken = $customerToken } | Out-Null
+    $parts = $customerToken.Split('.')
+    $signature = $(if ($parts[2][0] -eq 'A') { 'B' } else { 'A' }) + $parts[2].Substring(1)
+    $tampered = $parts[0] + '.' + $parts[1] + '.' + $signature
+    foreach ($protected in @('/api/v1/auth/me','/api/v1/orders/my-orders','/api/v1/tickets/me','/api/v1/events/my-events')) {
+        Invoke-Probe 'GET' $protected @(401,403) $null $tampered | Out-Null
+    }
     $refreshed = Invoke-Probe 'POST' '/api/v1/auth/refresh' 200 @{ refreshToken = $refreshToken }
     Assert-Probe ([bool]$refreshed.access_token) 'No se pudo renovar el token.'
     $customerToken = $refreshed.access_token
@@ -71,6 +81,10 @@ try {
     Invoke-Probe 'POST' '/api/v1/venues' 403 @{ name = 'Denied'; address = 'Calle de prueba 123'; city = 'Santiago'; country = 'Chile'; capacity = 3 } $customerToken | Out-Null
     $venue = Invoke-Probe 'POST' '/api/v1/venues' 201 @{ name = "Prueba AWS $runId"; address = 'Recinto de prueba'; city = 'Santiago'; country = 'Chile'; capacity = 3 } $adminToken
     $start = [DateTimeOffset]::UtcNow.AddDays(7)
+    Invoke-Probe 'POST' '/api/v1/events' 403 @{
+        title = 'Evento prohibido para cliente'; category = 'CONCERT'; startDate = $start.ToString('o'); endDate = $start.AddHours(2).ToString('o'); venueId = $venue.id
+        ticketCategories = @(@{name='General';price=10000;totalCapacity=1;maxPerUser=1})
+    } $customerToken | Out-Null
     $event = Invoke-Probe 'POST' '/api/v1/events' 201 @{
         title = "Verificación AWS $runId"; description = 'Prueba de despliegue de microservicios'; category = 'CONCERT'
         startDate = $start.ToString('o'); endDate = $start.AddHours(2).ToString('o'); venueId = $venue.id
@@ -91,8 +105,8 @@ try {
     $category = Invoke-Probe 'GET' "/api/v1/events/$eventId/ticket-categories/$categoryId" 200
     Assert-Probe ($category.availableCapacity -eq 3) 'La orden sin pago alteró el aforo.'
     Invoke-Probe 'POST' '/api/v1/auth/logout' 200 $null $customerToken | Out-Null
-    Invoke-Probe 'GET' '/api/v1/orders/my-orders' 401 $null $customerToken | Out-Null
-    Invoke-Probe 'GET' '/api/v1/tickets/me' 401 $null $customerToken | Out-Null
+    Invoke-Probe 'GET' '/api/v1/orders/my-orders' @(401,403) $null $customerToken | Out-Null
+    Invoke-Probe 'GET' '/api/v1/tickets/me' @(401,403) $null $customerToken | Out-Null
     Invoke-Probe 'POST' '/api/v1/auth/refresh' 401 @{ refreshToken = $refreshToken } | Out-Null
     $customerToken = ''
     @{ gateway = $gateway; checks = $checks; eventId = $eventId; orderId = $orderId;

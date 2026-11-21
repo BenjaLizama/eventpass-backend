@@ -52,6 +52,9 @@ public class SecurityConfig {
                         .requestMatchers(WHITE_LIST_URL)
                         .permitAll()
 
+                        .requestMatchers(HttpMethod.GET, "/api/v1/events/my-events")
+                        .hasAnyRole("ADMIN", "ORGANIZER")
+
                         .requestMatchers(
                                 HttpMethod.GET,
                                 "/api/v1/events/**"

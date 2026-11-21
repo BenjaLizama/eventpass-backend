@@ -53,17 +53,19 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
         try {
             Claims claims = extractAllClaims(jwt);
+            String purpose = claims.get("tokenType", String.class);
+            if ((!"ACCESS".equals(purpose) && !"SERVICE".equals(purpose))
+                    || claims.getExpiration() == null || claims.getIssuedAt() == null
+                    || claims.getId() == null || claims.getId().isBlank()) {
+                response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+                return;
+            }
+
 
             if (SecurityContextHolder.getContext().getAuthentication() == null) {
 
                 List<SimpleGrantedAuthority> grantedAuthorities =
                         extractAuthorities(claims);
-
-                logger.info(
-                        "JWT tokenType=" + claims.get("tokenType", String.class)
-                                + ", serviceName=" + claims.get("serviceName", String.class)
-                                + ", authorities=" + grantedAuthorities
-                );
 
                 String tokenType =
                         claims.get("tokenType", String.class);
@@ -118,11 +120,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             }
 
         } catch (Exception e) {
-            logger.error(
-                    "Error al validar token JWT en ms-events: "
-                            + e.getMessage(),
-                    e
-            );
+            logger.debug("JWT rechazado; no se autentica la petición.");
         }
 
         filterChain.doFilter(request, response);

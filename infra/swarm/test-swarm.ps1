@@ -77,6 +77,24 @@ try {
     $id = docker @compose ps -q manager
     # El stack y su .env se montan de solo lectura en el manager.
     docker exec -w /workspace $id docker stack deploy --resolve-image never -c docker-stack.yml eventpass | Out-Host
+    # Local tags are mutable: stack deploy alone may leave the old container alive.
+    # Force replacement and verify actual running image IDs, not just HTTP health.
+    $expectedImages = @{}
+    foreach ($service in 'ms-auth','ms-events','ms-orders','ms-tickets') {
+        $expectedImages[$service] = Invoke-Node worker @('image','inspect',"eventpass/${service}:ep3",'--format','{{.Id}}')
+        Invoke-Node manager @('service','update','--force','--detach=true','--no-resolve-image',"eventpass_$service") | Out-Null
+    }
+    Wait-Condition {
+        foreach ($service in $expectedImages.Keys) {
+            $containers = @(Invoke-Node worker @('ps','-q','--filter',"label=com.docker.swarm.service.name=eventpass_$service"))
+            if ($containers.Count -ne 1) { return $false }
+            $actual = Invoke-Node worker @('inspect',$containers[0],'--format','{{.Image}} {{.State.Health.Status}}')
+            if ($actual -ne "$($expectedImages[$service]) healthy") { return $false }
+            $update = Invoke-Node manager @('service','inspect',"eventpass_$service",'--format','{{.UpdateStatus.State}}')
+            if ($update -ne 'completed') { return $false }
+        }
+        return $true
+    } 'las cuatro tareas ejecutan exactamente las imágenes nuevas y están sanas' 420
     Wait-Condition { Test-Endpoints } 'cuatro microservicios accesibles por la red Swarm' 420
     Wait-Condition {
         $states = @(Invoke-Node manager @('service','ps','eventpass_init-queues','--format','{{.CurrentState}}'))

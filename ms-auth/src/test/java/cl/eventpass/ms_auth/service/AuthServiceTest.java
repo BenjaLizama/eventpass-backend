@@ -58,6 +58,7 @@ class AuthServiceTest {
 
     @BeforeEach
     void setUp() {
+        lenient().when(jwtService.hasTokenType(anyString(), eq("REFRESH"))).thenReturn(true);
         ReflectionTestUtils.setField(
                 authService,
                 "jwtExpiration",
@@ -545,6 +546,7 @@ class AuthServiceTest {
         verify(jwtService)
                 .extractUsername(refreshToken);
 
+        verify(jwtService).hasTokenType(refreshToken, "REFRESH");
         verifyNoMoreInteractions(jwtService);
 
         verifyNoInteractions(
@@ -587,6 +589,7 @@ class AuthServiceTest {
         verify(jwtService)
                 .extractUsername(refreshToken);
 
+        verify(jwtService).hasTokenType(refreshToken, "REFRESH");
         verifyNoMoreInteractions(jwtService);
 
         verifyNoInteractions(

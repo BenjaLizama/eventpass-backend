@@ -200,7 +200,7 @@ jobs:
           MS_ORDERS_CLIENT_SECRET: eventpass-local-demo-secret
         run: >
           ./ms-auth/mvnw -f e2e-tests/pom.xml
-          "-Dit.test=PlatformHealthIT,EventPassPurchaseFlowIT,OrderCancellationRestoresCapacityIT,OrderPerUserLimitIT,OrderInsufficientCapacityIT,TicketAccessControlIT,OrderItemCapacityIT"
+          "-Dit.test=PlatformHealthIT,SecurityBoundariesIT,OrganizerOwnershipIT,EventPassPurchaseFlowIT,OrderCancellationRestoresCapacityIT,OrderPerUserLimitIT,OrderInsufficientCapacityIT,TicketAccessControlIT,OrderItemCapacityIT"
           verify
 
       - name: Test Swagger and API Gateway in private mode
@@ -313,6 +313,10 @@ jobs:
           ./infra/aws/test-runner-adapter.ps1
       - name: Build private database verification image
         run: docker build -t eventpass-data-bootstrap:ci infra/aws/data-bootstrap
+      - name: Build and test Java Gateway authorizer image
+        run: |
+          docker build --platform linux/amd64 --provenance=false -t eventpass-gateway-authorizer:ci infra/gateway-authorizer
+          docker run --rm --network none --read-only --tmpfs /tmp --entrypoint /bin/sh eventpass-gateway-authorizer:ci -c 'test "$(id -u)" -gt 0'
       - name: Build and test purchase Lambda Docker image
         run: |
           docker build --platform linux/amd64 --provenance=false -t eventpass-purchase:ci infra/purchase-lambda
@@ -372,7 +376,7 @@ jobs:
           MS_ORDERS_CLIENT_SECRET: eventpass-local-demo-secret
         run: >-
           ./ms-auth/mvnw -B -f e2e-tests/pom.xml
-          '-Dit.test=PlatformHealthIT,EventPassPurchaseFlowIT,OrderCancellationRestoresCapacityIT,TicketAccessControlIT'
+          '-Dit.test=PlatformHealthIT,SecurityBoundariesIT,OrganizerOwnershipIT,EventPassPurchaseFlowIT,OrderCancellationRestoresCapacityIT,TicketAccessControlIT'
           verify
       - name: Save Swarm verification
         if: success()

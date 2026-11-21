@@ -31,11 +31,13 @@ public class TicketCategoryServiceImpl implements TicketCategoryService {
                         )
                 );
 
-        if (!category.getEvent().getId().equals(eventId)) {
+        if (category.getDeletedAt() != null || !category.getEvent().getId().equals(eventId)) {
             throw new ResourceNotFoundException(
                     "La categoría de ticket no pertenece al evento indicado."
             );
         }
+
+        cl.eventpass.ms_events.config.EventVisibility.requireVisible(category.getEvent());
 
         return new TicketCategoryResponse(
                 category.getId(),

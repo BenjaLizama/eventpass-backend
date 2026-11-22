@@ -6,6 +6,7 @@ $local = Join-Path $PSScriptRoot '../../.local'
 $repository = 'BenjaLizama/eventpass-backend'
 $identity = & (Join-Path $PSScriptRoot 'Invoke-LabAws.ps1') -AwsArguments @('sts','get-caller-identity','--output','json') | ConvertFrom-Json
 if ($identity.Account -ne '119065066402') { throw 'Cuenta AWS incorrecta.' }
+& (Join-Path $PSScriptRoot 'Invoke-LabAws.ps1') -AwsArguments @('ecs','describe-clusters','--clusters','eventpass','--query','clusters[].clusterName','--output','json') | Out-Null
 $revision = & git -c safe.directory='*' rev-parse HEAD
 & node --input-type=module -e 'import {readFileSync} from "node:fs"; import {validateConfig} from "./infra/aws/deploy-lab.mjs"; validateConfig(JSON.parse(readFileSync(".local/aws-deploy-config.json")), JSON.parse(readFileSync(".local/aws-task-config.json")), process.argv[1]);' $revision
 if ($LASTEXITCODE -ne 0) { throw 'Configuración del pipeline inválida.' }

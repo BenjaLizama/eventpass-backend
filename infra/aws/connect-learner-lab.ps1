@@ -31,10 +31,12 @@ try {
     $session | Export-Clixml -LiteralPath $sessionPath
     $identity = & (Join-Path $PSScriptRoot 'Invoke-LabAws.ps1') -AwsArguments @('sts', 'get-caller-identity', '--output', 'json') | ConvertFrom-Json
     if ($identity.Account -ne $session.AccountId) { throw 'Las claves pertenecen a otra cuenta AWS.' }
+    # STS can identify credentials that Academy has already revoked for service access.
+    & (Join-Path $PSScriptRoot 'Invoke-LabAws.ps1') -AwsArguments @('ecs', 'describe-clusters', '--clusters', 'eventpass', '--query', 'clusters[].clusterName', '--output', 'json') | Out-Null
     Write-Host "Conexión verificada: cuenta $($identity.Account), región $($session.Region)."
     Write-Host 'Avísame que la conexión quedó verificada. No envíes las claves por el chat.'
 } catch {
     if ($null -ne $previousSession) { [IO.File]::WriteAllText($sessionPath, $previousSession) }
     else { Remove-Item -LiteralPath $sessionPath -ErrorAction SilentlyContinue }
-    throw
+    throw "No se verificó la sesión. Comprueba Docker Desktop y Start Lab con AWS en verde; copia de nuevo los tres valores de AWS Details. Se conservó la sesión anterior. Detalle: $($_.Exception.Message)"
 }

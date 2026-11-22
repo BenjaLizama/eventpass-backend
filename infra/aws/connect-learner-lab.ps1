@@ -5,6 +5,12 @@ param()
 $ErrorActionPreference = 'Stop'
 if (-not $IsWindows) { throw 'Este asistente protege las claves con la cuenta de Windows y requiere Windows.' }
 Get-Command docker -ErrorAction Stop | Out-Null
+try {
+    & docker info --format '{{.ServerVersion}}' *> $null
+    if ($LASTEXITCODE -ne 0) { throw 'Docker no disponible.' }
+} catch {
+    throw 'Docker Desktop no está listo. Ábrelo en modo Linux, espera a que el motor esté en ejecución y repite este comando. Aún no se solicitaron ni guardaron claves.'
+}
 Write-Host 'Abre AWS Academy > AWS Details > AWS CLI. Copia solo el valor de cada campo.'
 Write-Host 'Los tres valores se introducen ocultos y se guardan cifrados para tu usuario de Windows.'
 $session = [pscustomobject]@{

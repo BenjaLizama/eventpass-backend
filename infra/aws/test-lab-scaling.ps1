@@ -1,8 +1,9 @@
 #Requires -Version 7.0
 [CmdletBinding()]
 param(
-    [ValidateRange(180,900)][int] $LoadSeconds = 600,
-    [ValidateRange(1,45)][int] $RequestsPerSecond = 35,
+    [ValidateRange(180,900)][int] $LoadSeconds = 900,
+    [ValidateRange(1,45)][int] $RequestsPerSecond = 45,
+    [ValidateRange(1,50)][int] $EventCount = 48,
     [ValidateRange(300,1800)][int] $ScaleInWaitSeconds = 1500,
     [string] $AwsScript = (Join-Path $PSScriptRoot 'Invoke-LabAws.ps1')
 )
@@ -11,8 +12,8 @@ $local = Join-Path $PSScriptRoot '../../.local'
 $started = [DateTimeOffset]::UtcNow
 $events = [Collections.Generic.List[string]]::new()
 $samples = [Collections.Generic.List[object]]::new()
-$report = @{ StartedAt=$started.ToString('o'); Policy='eventpass-events-cpu'; Threshold=60;
-    ManualCapacityChanges=$false; SyntheticMetrics=$false; Success=$false }
+$report = @{ StartedAt=$started.ToString('o'); Phase='preparing'; Policy='eventpass-events-cpu'; Threshold=60;
+    ManualCapacityChanges=$false; SyntheticMetrics=$false; Success=$false; SeedEventCount=$EventCount }
 $token = ''; $load = $null; $stdout = $null; $stderr = $null
 function Invoke-ScalingProbeAws([string[]] $Arguments) {
     $text = & $AwsScript -AwsArguments ($Arguments + @('--output','json'))
@@ -35,9 +36,14 @@ function Snapshot {
         $_.StatusCode -eq 'Successful' -and [DateTimeOffset]$_.StartTime -ge $started -and
         $_.Cause -like '*eventpass-events-cpu*'
     })
+    $targets=Invoke-ScalingProbeAws @('elbv2','describe-target-health','--target-group-arn',$service.loadBalancers[0].targetGroupArn)
+    $healthy=@($targets.TargetHealthDescriptions | Where-Object { $_.TargetHealth.State -eq 'healthy' }).Count
+    $catalog=Invoke-RestMethod "$gateway/api/v1/events?page=0&size=1" -TimeoutSec 10 -MaximumRedirection 0
+    if ($catalog.status -ne 200) { throw 'El catálogo no respondió correctamente durante la observación del escalado.' }
     $sample = @{ At=[DateTimeOffset]::UtcNow.ToString('o'); Desired=$service.desiredCount;
-        Running=$service.runningCount; Pending=$service.pendingCount; Activities=$automatic }
+        Running=$service.runningCount; Pending=$service.pendingCount; HealthyTargets=$healthy; CatalogStatus=200; Activities=$automatic }
     $samples.Add($sample)
+    Save-Report
     Write-Host "Eventos: deseadas=$($sample.Desired), ejecutándose=$($sample.Running), pendientes=$($sample.Pending)."
     $sample
 }
@@ -70,7 +76,7 @@ try {
     $run = [guid]::NewGuid().ToString('N').Substring(0,12)
     $venue = Probe POST '/api/v1/venues' @{ name="Carga ECS $run"; address='Recinto de prueba de escalabilidad'; city='Santiago'; country='Chile'; capacity=10000 }
     $date = [DateTimeOffset]::UtcNow.AddDays(30)
-    foreach ($index in 1..16) {
+    foreach ($index in 1..$EventCount) {
         $categories = @(1..16 | ForEach-Object { @{ name="Localidad $_"; price=10000; totalCapacity=100; maxPerUser=2 } })
         $event = Probe POST '/api/v1/events' @{ title="Carga ECS $run $index"; description='Datos temporales de prueba de escalado; sin compras';
             category='CONCERT'; startDate=$date.ToString('o'); endDate=$date.AddHours(2).ToString('o'); venueId=$venue.id; ticketCategories=$categories }
@@ -87,6 +93,7 @@ try {
         $info.ArgumentList.Add($argument)
     }
     $load = [Diagnostics.Process]::Start($info)
+    $report.Phase='load'
     $stdout=$load.StandardOutput.ReadToEndAsync(); $stderr=$load.StandardError.ReadToEndAsync()
     $deadline=[DateTimeOffset]::UtcNow.AddSeconds($LoadSeconds+30)
     $out=$null
@@ -94,39 +101,49 @@ try {
         Start-Sleep -Seconds 25
         $sample=Snapshot
         $cause=@($sample.Activities | Where-Object Description -match 'desired count to 2\b')
-        if ($cause.Count -and $sample.Desired -eq 2 -and $sample.Running -eq 2 -and -not $sample.Pending) { $out=$sample; break }
+        if ($cause.Count -and $sample.Desired -eq 2 -and $sample.Running -eq 2 -and $sample.HealthyTargets -eq 2 -and -not $sample.Pending) { $out=$sample; break }
         if ($load.HasExited) { break }
     } while ([DateTimeOffset]::UtcNow -lt $deadline)
     if (-not $load.HasExited) { $load.StandardInput.WriteLine('stop') }
-    if (-not $load.WaitForExit(15000)) { $load.Kill($true); throw 'El generador no terminó dentro del límite.' }
+    if (-not $load.WaitForExit(30000)) { $load.Kill($true); throw 'El generador no terminó dentro del límite.' }
+    if (-not (Test-Path -LiteralPath $loadReport)) { throw 'El generador no produjo un informe; revisar su salida de error.' }
     $report.Load=Get-Content -Raw $loadReport | ConvertFrom-Json
     if ($load.ExitCode -ne 0 -or $report.Load.failures) { throw 'Hubo errores HTTP o de red bajo carga. Revisar aws-catalog-load.json.' }
     if (-not $out) { throw 'La carga real no produjo un escalado automático verificable al 60% de CPU. No se cambió el umbral ni la capacidad manualmente.' }
     $report.ScaleOut=$out
+    $report.Phase='waiting-for-scale-in'
+    Save-Report
     Write-Host 'OK: subida automática a dos tareas confirmada por el historial de AWS. Carga detenida; esperando reducción automática.'
     $deadline=[DateTimeOffset]::UtcNow.AddSeconds($ScaleInWaitSeconds)
     do {
         Start-Sleep -Seconds 30
         $sample=Snapshot
         $cause=@($sample.Activities | Where-Object { $_.Description -match 'desired count to 1\b' -and [DateTimeOffset]$_.StartTime -gt [DateTimeOffset]$out.At })
-        if ($cause.Count -and $sample.Desired -eq 1 -and $sample.Running -eq 1 -and -not $sample.Pending) {
-            $report.ScaleIn=$sample; $report.Success=$true; break
+        if ($cause.Count -and $sample.Desired -eq 1 -and $sample.Running -eq 1 -and $sample.HealthyTargets -eq 1 -and -not $sample.Pending) {
+            $report.ScaleIn=$sample; $report.Success=$true; $report.Phase='completed'; break
         }
     } while ([DateTimeOffset]::UtcNow -lt $deadline)
     if (-not $report.Success) { throw 'No se observó la reducción automática dentro del tiempo acotado. Revisar métricas e historial.' }
     Write-Host 'OK: escalado automático real 1 -> 2 -> 1 sin cambios manuales de capacidad ni métricas artificiales.'
 } catch {
+    $report.Phase='failed'
     $report.Error=$_.Exception.Message
     throw
 } finally {
     if ($load -and -not $load.HasExited) {
-        try { $load.StandardInput.WriteLine('stop'); if (-not $load.WaitForExit(15000)) { $load.Kill($true) } } catch {}
+        try { $load.StandardInput.WriteLine('stop'); if (-not $load.WaitForExit(30000)) { $load.Kill($true) } } catch {}
+    }
+    if ($load -and $load.HasExited) { $report.WorkerExitCode=$load.ExitCode }
+    if ($stderr -and $stderr.IsCompleted) {
+        try { $report.WorkerError=$stderr.GetAwaiter().GetResult() }
+        catch { $report.WorkerOutputUnavailable=$true }
     }
     $cleanup=[Collections.Generic.List[string]]::new()
     foreach ($id in $events) {
         try { $null=Probe PATCH "/api/v1/events/$id/cancel" } catch { $cleanup.Add($id) }
     }
     $report.CleanupPending=@($cleanup)
+    if ($cleanup.Count) { $report.Success=$false; $report.CleanupFailed=$true }
     if ($token) { try { $null=Probe POST '/api/v1/auth/logout' } catch {} }
     $token=$null; $password=$null
     try {
@@ -137,4 +154,5 @@ try {
         $report.Cpu=@($cpu.Datapoints | Sort-Object Timestamp)
     } catch { $report.MetricsUnavailable=$true }
     Save-Report
+    if ($cleanup.Count) { throw 'Quedaron eventos de prueba pendientes de cancelar. No se considera una prueba completada.' }
 }

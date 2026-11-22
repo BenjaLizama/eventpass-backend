@@ -22,3 +22,14 @@ test('no acepta otros hosts/rutas o tasas que excedan la cuota; corta ante error
   assert.equal(result.requests, 3);
   assert.equal(result.stoppedOnErrors, true);
 });
+
+test('registra fallos de transporte sin convertirlos en éxitos ni registrar mensajes sensibles', async () => {
+  const result = await loadCatalog({ url, seconds: 2, rate: 20, concurrency: 1, fetcher: async () => {
+    throw Object.assign(new Error('never-log-private-value'), { name: 'TimeoutError' });
+  } });
+  assert.equal(result.failures, 3);
+  assert.equal(result.statuses['network-error'], 3);
+  assert.equal(result.errorTypes['TimeoutError:unknown'], 3);
+  assert.equal(result.retries, 0);
+  assert.ok(!JSON.stringify(result).includes('never-log-private-value'));
+});

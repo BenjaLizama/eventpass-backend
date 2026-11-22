@@ -72,8 +72,14 @@ export function buildMonitoringTemplate(outputs, functionArn) {
       ['Errors','Throttles'].map(m => ['AWS/Lambda',m,'FunctionName',name,{ stat: 'Sum' }])),
     metricWidget('Lambda: duración máxima (ms)', 12, 10,
       [['AWS/Lambda','Duration','FunctionName',name,{ stat: 'Maximum' }]], { annotations: { horizontal: [{ label: 'Advertencia 15 s', value: 15000 }] } }),
-    { type: 'text', x: 0, y: 16, width: 24, height: 3, properties: { markdown:
-      '## Cómo actuar\nDLQ: revisar logs del procesador y recuperar únicamente la orden afectada después de corregir la causa.\n\nSin destinos sanos: revisar tareas y despliegues de ECS. Las alarmas se consultan en CloudWatch; no tienen acciones externas ni escalan o detienen recursos. La antigüedad de SQS no reemplaza una auditoría de órdenes en SQL.' } }
+    metricWidget('Eventos: CPU real y objetivo de autoescalado', 0, 16,
+      [['AWS/ECS','CPUUtilization','ClusterName','eventpass','ServiceName','eventpass-ms-events',{ stat: 'Average' }]],
+      { yAxis: { left: { min: 0, max: 100 } }, annotations: { horizontal: [{ label: 'Objetivo CPU 60%', value: 60 }] } }),
+    metricWidget('Eventos: destinos sanos del ALB', 12, 16,
+      [['AWS/ApplicationELB','HealthyHostCount','TargetGroup',ids.EventsTargetGroupArn.slice(prefix.length),'LoadBalancer',balancer,{ stat: 'Minimum' }]],
+      { yAxis: { left: { min: 0 } }, annotations: { horizontal: [{ label: 'Mínimo 1', value: 1 }, { label: 'Máximo 2', value: 2 }] } }),
+    { type: 'text', x: 0, y: 22, width: 24, height: 4, properties: { markdown:
+      '## Cómo actuar\nDLQ: revisar logs del procesador y recuperar únicamente la orden afectada después de corregir la causa.\n\nSin destinos sanos: revisar tareas y despliegues de ECS. Las nueve alarmas operativas no tienen acciones externas. El escalado de Eventos usa por separado las alarmas administradas de target tracking: correlacionar CPU, destinos sanos e historial de Application Auto Scaling. No confundir dos tareas durante un despliegue con una subida por carga. La antigüedad de SQS no reemplaza una auditoría de órdenes en SQL.' } }
   ];
   resources.Dashboard = { Type: 'AWS::CloudWatch::Dashboard', Properties: { DashboardName: 'eventpass-lab', DashboardBody: JSON.stringify({ widgets }) } };
   return { AWSTemplateFormatVersion: '2010-09-09', Description: 'EventPass lab monitoring without external actions',

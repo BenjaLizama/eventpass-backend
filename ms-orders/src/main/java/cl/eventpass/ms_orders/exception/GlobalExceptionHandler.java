@@ -193,6 +193,13 @@ public class GlobalExceptionHandler {
         );
     }
 
+    @ExceptionHandler({DependencyUnavailableException.class, org.springframework.web.client.ResourceAccessException.class})
+    public ResponseEntity<StandardErrorResponse> handleDependencyUnavailable(Exception ex, HttpServletRequest request) {
+        return build(HttpStatus.SERVICE_UNAVAILABLE, "DEPENDENCY_UNAVAILABLE",
+                "Un servicio requerido no está disponible temporalmente. Intenta nuevamente más tarde.",
+                ex, request, null);
+    }
+
     @ExceptionHandler(Exception.class)
     public ResponseEntity<StandardErrorResponse> handleGenericException(
             Exception ex,

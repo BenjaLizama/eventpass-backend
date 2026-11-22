@@ -41,7 +41,9 @@ try {
     if (-not (Test-Path (Join-Path $PSScriptRoot '.env'))) {
         Copy-Item -LiteralPath (Join-Path $PSScriptRoot '.env.example') -Destination (Join-Path $PSScriptRoot '.env')
     }
-    docker @compose up -d --wait | Out-Host
+    # Recreate only the node containers: their data volumes remain intact. A stopped
+    # DinD container can retain containerd PID files whose PID is reused on restart.
+    docker @compose up -d --force-recreate --wait | Out-Host
     foreach ($name in 'manager','worker') {
         Wait-Condition {
             try { Invoke-Node $name @('info','--format','{{.ServerVersion}}') | Out-Null; return $true }

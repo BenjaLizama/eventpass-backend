@@ -75,6 +75,9 @@ jobs:
       - name: Configure CloudWatch dashboard and alarms
         shell: pwsh
         run: ./infra/aws/start-lab-monitoring.ps1 -Apply -AwsScript ./infra/aws/Invoke-RunnerAws.ps1
+      - name: Configure bounded Events automatic scaling
+        shell: pwsh
+        run: ./infra/aws/start-lab-scaling.ps1 -AwsScript ./infra/aws/Invoke-RunnerAws.ps1
       - name: Verify sessions, roles, purchases and tickets in AWS
         shell: pwsh
         run: |

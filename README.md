@@ -1,780 +1,266 @@
-# 🎟️ EventPass
+# EventPass: guía de desarrollo, despliegue y entrega EP3
 
-**EventPass** es una plataforma distribuida para la gestión de eventos masivos, diseñada bajo una arquitectura de **microservicios** y orientada a escenarios de alta concurrencia.
+Guía única del proyecto. Los comandos se ejecutan desde la raíz en PowerShell 7, con Docker Desktop en modo Linux. Los archivos de código, configuración y pruebas permanecen en sus carpetas; las instrucciones se mantienen aquí.
 
-El sistema permite gestionar usuarios, eventos, recintos, órdenes de compra y emisión/validación de entradas, utilizando servicios desacoplados y bases de datos independientes.
+## 1. Qué construimos y cómo se conecta
 
-La arquitectura aplica el patrón **Database per Service**, comunicación REST para operaciones síncronas y **AWS SQS** para procesamiento asíncrono.
+EventPass gestiona usuarios, eventos, compras simuladas y entradas. El backend sigue siendo Java 21 con Spring Boot.
 
-## Pruebas locales
+```text
+Cliente / Postman / Swagger
+          |
+     API Gateway -- Lambda Java: sesión y roles
+          |
+       VPC Link
+          |
+      ALB interno
+          |
+  ECS: Auth / Eventos / Órdenes / Tickets
+                          |
+                  SQS compra pendiente
+                          |
+                 Lambda procesar compra
+                          |
+           reservar aforo -> emitir -> confirmar
+```
 
-Copia `.env.example` a `.env` para ejecutar Docker Compose con la configuración de desarrollo. Los valores de ejemplo son exclusivos del entorno local. Cada microservicio conserva sus perfiles Spring para ejecutarse también de forma independiente.
-
-La [guía de Swagger y API Gateway](infra/gateway/README.md) muestra cómo probar la compra con Floci y los microservicios en la red privada de Docker. GitHub Actions ejecuta las pruebas directas y las del entorno simulado sin una cuenta de AWS.
-
----
-
-## Entrega EP3
-
-Spring Boot sigue siendo el backend, Docker construye las imágenes, Floci simula las integraciones y AWS ejecuta los recursos reales. La evaluación exige además Docker Swarm: ECS del diagrama autorizado no sustituye esa evidencia.
-
-| Evidencia | Archivos y ejecución |
+| Componente | Responsabilidad |
 | --- | --- |
-| Dockerfiles y endpoints locales (IE1, IE2) | Dockerfiles de cada servicio; `docker compose up -d --build`. |
-| Manager, worker, despliegue y escalado (IE3, IE7, IE8, IE9) | [Práctica Swarm](infra/swarm/README.md): `./infra/swarm/test-swarm.ps1 -KeepRunning`. |
-| Build, test, configuración cloud y despliegue (IE4, IE5, IE6) | `.github/workflows/tests.yml` y `deploy-aws.yml`; [publicación AWS](infra/aws/README.md). |
-| Función, cola, Gateway y flujo completo (IE10–IE15) | [Procesador de compras](infra/purchase-lambda/README.md), [Swagger común](infra/gateway/README.md) y `test-lab-purchase.ps1` en AWS. |
-| Presentación (IE16, IE17) | Video de 3–8 minutos, con voz de ambos estudiantes y demostraciones reales. |
+| Auth | Usuarios, roles, ACCESS/REFRESH, sesiones Redis y credenciales de servicio. |
+| Eventos | Recintos, catálogo, propiedad del organizador y reservas de aforo. |
+| Órdenes | Órdenes propias, pago simulado, outbox y resultado de compra. |
+| Tickets | Emisión idempotente, consulta del propietario y uso único por STAFF. |
+| Lambda de compras | Consume SQS, solicita reserva, emite tickets y comunica el resultado. |
+| Lambda autorizadora | Consulta Auth por red privada y aplica roles por ruta; nunca sustituye los controles de propiedad del backend. |
 
-El pipeline también prueba Swarm y compras con dos nodos Docker aislados. Publicar en AWS requiere laboratorio encendido, credenciales vigentes y `AWS_DEPLOY_ENABLED=true`. Tener el workflow no acredita una ejecución cloud: hay que mostrar su resultado y los servicios después del despliegue. Floci es una prueba previa. JWT se valida en Spring Boot y se protege el Gateway con un [autorizador Lambda Java sin caché](infra/gateway-authorizer/README.md), con roles por ruta y revocación de sesión.
+Los cuatro microservicios y las dos Lambdas tienen Dockerfile. ECR almacena imágenes y ECS/Fargate ejecuta los microservicios. Lambda ejecuta imágenes compatibles con su runtime. CloudFormation administra red, datos y monitoreo; los scripts coordinan comandos Docker y AWS.
 
-Los `.ps1` reúnen comandos PowerShell de Docker/AWS. Los `.mjs` contienen JavaScript ejecutado por Node.js para generar configuraciones o coordinar operaciones; `.test.mjs` son pruebas. `data-bootstrap` es un contenedor temporal para crear/verificar bases y usuarios dentro de la red privada, no otro microservicio permanente; Flyway crea las tablas de negocio. Las guías incluyen scripts y CloudFormation; IE5 permite scripts, comandos o infraestructura como código. Las extensiones elegidas no son un requisito de AWS. La Lambda actual usa Node.js: la rúbrica pide una función funcional, sin fijar lenguaje; los cuatro microservicios siguen en Java.
+### Tres entornos diferentes
 
-## 🏛️ Arquitectura
+| Entorno | Ejecución y datos | Qué demuestra |
+| --- | --- | --- |
+| Desarrollo / Floci | Docker Compose, PostgreSQL, MongoDB/Redis; Floci simula Gateway, SQS y Lambda. DynamoDB Local tiene una prueba separada. | Desarrollo sin credenciales ni consumo AWS y pruebas funcionales. |
+| Práctica Swarm | Manager y worker en dos motores Docker aislados dentro de este PC; PostgreSQL, MongoDB, Redis y Floci. | Stack, red overlay, servicios distribuidos y escalado manual. Compra de referencia síncrona; no confundir con la Lambda de AWS. |
+| AWS Academy | Gateway, VPC Link, ALB interno, cuatro servicios ECS, Aurora, DynamoDB, Redis, SQS, Lambdas y CloudWatch. | Integración real en nube y despliegue desde GitHub Actions. |
 
-EventPass está compuesto por cuatro microservicios independientes:
+ECS y Swarm son destinos distintos: ECS no reemplaza la evidencia Swarm de la pauta. Dos motores en un PC no ofrecen independencia física ni toleran la caída del PC.
 
-```text
-Cliente / Swagger
-        |
-  API Gateway
-        |
-  Balanceador privado (AWS)
-        |
-  Auth / Eventos / Ordenes / Tickets (Spring Boot)
-                       |
-                SQS: compra pendiente
-                       |
-                Lambda: procesar compra
-                       |
-                Reservar aforo y emitir ticket
+## 2. Arranque y pruebas desde una interfaz
 
-Datos AWS: Aurora (Auth/Eventos/Ordenes), DynamoDB (Tickets), Redis (sesiones).
-Datos locales de Compose/Swarm: PostgreSQL, MongoDB y Redis.
-Floci simula Gateway/SQS/Lambda; no representa un despliegue real en AWS.
+Necesitas Docker Desktop iniciado. Para compilar/pruebas Java fuera de Docker usa JDK 21; para las herramientas `.mjs`, Node.js 22.
+
+```powershell
+# Solo la primera vez; no reemplaces un .env que ya tenga tus valores.
+if (-not (Test-Path .env)) { Copy-Item .env.example .env }
+
+# Compra asíncrona, Gateway emulado y Swagger común:
+./infra/purchase-lambda/start-local-purchase.ps1 -Build
 ```
 
-### Principios principales
+Abre **http://127.0.0.1:8090/**. Los microservicios y las bases quedan privados en Docker. Floci se administra en http://127.0.0.1:4567/, pero esa página no es la interfaz de EventPass. Después de reiniciar el PC repite el script; usa `-Build` cuando cambie Java. Recrear el contenedor Floci borra sus recursos emulados.
 
-- **Microservicios desacoplados:** cada servicio posee una responsabilidad de negocio específica.
-- **Database per Service:** cada microservicio administra su propia persistencia.
-- **Seguridad centralizada:** autenticación y autorización mediante JWT y RBAC.
-- **Comunicación asíncrona:** eventos de negocio mediante AWS SQS.
-- **Alta concurrencia:** control de reservas y actualización segura del aforo.
-- **Contenerización:** todos los servicios e infraestructura local se ejecutan mediante Docker Compose.
-- **Configuración por ambientes:** perfiles `dev` y `prod`.
+Para la demo anterior sin procesador asíncrono: `./infra/gateway/start-local-demo.ps1 -Build -SmokeTest`. Para desarrollo con los cuatro puertos directos: `docker compose up -d --build --wait`; Swagger individual en `http://127.0.0.1:8081/swagger-ui/index.html` hasta el puerto 8084. Termina las compras antes de cambiar entre modos.
 
----
+### Compra manual en Swagger o Postman
 
-# 📦 Microservicios
+1. Inicia sesión con ADMIN. Crea un recinto y un evento con fechas futuras; copia los UUID devueltos y publica el evento. ADMIN también puede crear ORGANIZER y STAFF.
+2. Registra un CUSTOMER y haz login. En **Authorize** usa su `access_token`; `refresh_token` solo sirve para renovar.
+3. `GET /api/v1/events?page=0&size=5`: copia un evento publicado y el ID de su categoría de tickets. No uses los UUID ficticios de los ejemplos como datos existentes.
+4. `POST /api/v1/orders`: crea la orden del cliente. `POST /api/v1/orders/{id}/payment`: simula el pago.
+5. Consulta `GET /api/v1/orders/{id}` hasta el estado final y `GET /api/v1/tickets/me` para las entradas.
+6. Con STAFF, ejecuta `PATCH /api/v1/tickets/{ticketCode}/use`: el primer uso es 200; repetir debe devolver 409. CUSTOMER no puede validar su propia entrada.
 
-## 🔐 ms-auth
+La orden asíncrona pasa de `AWAITING_PAYMENT` a `PENDING_ISSUANCE`, y termina en `PAID` con ticket. Si el aforo se agotó, termina en `REJECTED_NO_CAPACITY` con pago `REFUNDED`. **No hay pasarela bancaria ni devolución de dinero real.** Un fallo técnico mantiene el trabajo pendiente; no debe tratarse como rechazo por aforo.
 
-Responsable de autenticación, autorización, usuarios y sesiones.
+### Roles y seguridad
 
-### Funcionalidades
+| Operación externa | Acceso |
+| --- | --- |
+| Registro, login, refresh, catálogo publicado y recintos | Público; refresh verifica el token de renovación. |
+| Perfil y logout | Usuario humano con sesión vigente. |
+| Crear/modificar/publicar/cancelar eventos | ADMIN u ORGANIZER; el organizador solo administra sus propios eventos. |
+| Crear recintos | ADMIN u ORGANIZER. |
+| Crear ORGANIZER/STAFF | ADMIN; el registro público solo crea CUSTOMER. |
+| Órdenes y tickets | CUSTOMER, solo los propios. |
+| Validación del ticket | STAFF. ADMIN/ORGANIZER no heredan este permiso. |
+| Emisión, reservas y tokens de servicio | Solo rutas internas, ausentes del Gateway público. |
 
-- Registro e inicio de sesión.
-- Generación y validación de JWT.
-- Access tokens y refresh tokens.
-- Gestión de sesiones mediante Redis.
-- Blacklist y revocación de tokens.
-- RBAC basado en roles.
-- Gestión administrativa de usuarios.
-- Estados de usuario.
-- Protección de endpoints mediante Spring Security.
-- Documentación OpenAPI.
+En AWS se usa un **Lambda REQUEST authorizer Java**, no el autorizador JWT RSA incorporado de AWS: nuestro emisor utiliza HMAC. Auth verifica firma, vencimiento, propósito ACCESS, cuenta y sesión; el Gateway aplica el rol actual por ruta sin caché (TTL 0). Refresh, SERVICE, firmas alteradas, sesiones cerradas y rutas desconocidas no autorizan acceso. Falta de Bearer puede dar 401; denegación del autorizador, 403.
 
-### Roles
+Cada microservicio mantiene su validación y la propiedad de recursos. Cambios de rol/estado, eliminación y cambios de correo revocan sesiones mediante un índice por usuario en Redis. STAFF es global: todavía no existe asignación de validadores a eventos concretos. No muestres claves, Bearers, join tokens ni contraseñas en el video.
 
-```text
-ADMIN
-STAFF
-ORGANIZER
-SUPPORT
-CUSTOMER
+## 3. Configuración y archivos de infraestructura
+
+| Archivo / variable | Uso |
+| --- | --- |
+| `.env.example` / `.env` | Valores ficticios compartidos de desarrollo / copia local ignorada por Git. Swarm tiene su `.env` aislado para no compartir credenciales de esa práctica. |
+| `application.yaml`, `application-dev.yaml`, `application-prod.yaml` | Configuración Spring y perfiles; `prod` ejecuta Flyway y valida el esquema. Tickets añade `dynamodb` en AWS. |
+| `JWT_SECRET`, `ADMIN_PASSWORD`, `MS_ORDERS_CLIENT_SECRET`, `REDIS_PASSWORD`, `*_DB_PASSWORD` | Secretos. En AWS se entregan por referencias ARN de Secrets Manager, nunca dentro de la imagen o del repositorio. |
+| `AUTH_SERVICE_URL`, `EVENTS_SERVICE_URL`, `ORDERS_SERVICE_URL`, `TICKETS_SERVICE_URL` | Direcciones internas de dependencias; no son las URL públicas del comprador. |
+| `AWS_REGION`, variables `*_QUEUE`, `TICKETS_DYNAMODB_TABLE` | Región, nombres de colas y tabla del entorno. Credenciales de prueba solo en emulación; en AWS se usa el rol de ejecución/tarea. |
+| `.local/` | Inventario, referencias ARN, informes y credenciales cifradas del PC. Ignorado; no compartirlo como documentación. |
+| `.ps1` | Automatización PowerShell: Docker/AWS CLI, esperas y validaciones. No reemplaza Spring Boot. |
+| `.mjs` / `.test.mjs` | JavaScript Node: genera plantillas/coordina operaciones / comprueba esa lógica. No es otro backend web. |
+| `infra/aws/data-bootstrap` | Contenedor temporal dentro de la VPC que prepara usuarios/bases y verifica SQL/Redis. Flyway crea las tablas de negocio. |
+| `.github/workflows/tests.yml` y `deploy-aws.yml` | Pipeline de pruebas y publicación de la versión aprobada. |
+
+No es correcto centralizar secretos AWS en el `.env` público. `.env` resuelve el desarrollo; Secrets Manager y las identidades temporales resuelven el despliegue. La pauta IE5 admite scripts, comandos e infraestructura como código; las guías del curso incluyen scripts y CloudFormation.
+
+## 4. Swarm, escalado y prueba de carga
+
+```powershell
+./infra/swarm/test-swarm.ps1 -KeepRunning
+# Con imágenes ya construidas puedes añadir -SkipBuild.
+node infra/swarm/test-scaling.mjs
 ```
 
-### Persistencia
+El primer comando construye cuatro imágenes, crea los dos motores, une el worker, carga imágenes, despliega `infra/swarm/docker-stack.yml`, comprueba sesión y escala Eventos 1 -> 2 -> 1. Recrea los contenedores de nodos conservando sus volúmenes para evitar PID obsoletos al reiniciar Docker-in-Docker.
 
-```text
-PostgreSQL
-    │
-    └── eventpass_auth
+El segundo genera peticiones independientes de catálogo con concurrencias 2, 4 y 8, mantiene tráfico durante subida y bajada, exige respuestas válidas sin errores y registra solicitudes, estados HTTP, p95 y máximo de latencia por fase en `.local/swarm/scaling-load.json`. Cada petición abre una conexión, sin reintentos. No mide capacidad máxima, conexiones persistentes durante la retirada, miles de compradores ni garantiza mayor velocidad con dos réplicas en el mismo PC. La prueba inicial con conexiones persistentes observó dos interrupciones TCP al reducir réplicas: no presentar esta práctica como drenaje perfecto de conexiones. El stack permite 45 s de parada y Eventos dispone de 30 s para apagado ordenado. Siempre se intenta restaurar una réplica.
 
-Redis
-    │
-    ├── Sesiones
-    └── Blacklist de tokens
+```powershell
+$swarm = @('compose','-p','eventpass-swarm-lab','-f','infra/swarm/compose.lab.yaml')
+docker @swarm exec manager docker node ls
+docker @swarm exec manager docker stack services eventpass
+docker @swarm exec manager docker service ps eventpass_ms-events
+docker @swarm exec manager docker service scale eventpass_ms-events=2
+Invoke-RestMethod 'http://127.0.0.1:18082/api/v1/events?page=0&size=1'
+docker @swarm exec manager docker service scale eventpass_ms-events=1
+docker @swarm down
 ```
 
----
+`docker-stack.yml` usa imágenes construidas, `deploy`, red overlay, routing mesh y actualización start-first con rollback. Swarm no usa `build` ni `depends_on`. `env_file` carga explícitamente su configuración. Datos fijados al manager etiquetado; aplicaciones en el worker. No escales bases de datos con `service scale`: sus volúmenes locales no se replican. Swarm usa Docker-in-Docker privilegiado exclusivamente para esta práctica, sin montar el socket del PC ni publicar la API del motor.
 
-## 🎫 ms-events
+Para dos máquinas Linux: `docker swarm init --advertise-addr <IP_PRIVADA_MANAGER>`, etiqueta el nodo con `docker node update --label-add eventpass-data=true <NODE_ID>` y obtén `docker swarm join-token worker`. Ejecuta el join en el segundo host. Entre nodos permite 2377/TCP, 7946/TCP+UDP y 4789/UDP; no desde Internet. Carga las mismas imágenes en ambos o usa ECR autenticado. Desde la carpeta del stack: `docker stack deploy --with-registry-auth -c docker-stack.yml eventpass`. Un manager y un worker no constituyen alta disponibilidad.
 
-Responsable de la gestión del catálogo de eventos y sus recintos.
+## 5. AWS Academy: conexión y despliegue
 
-### Funcionalidades
+La sala utilizada es la cuenta `119065066402`, región `us-east-1`. Entra por AWS Academy -> Start Lab -> indicador verde -> botón AWS; no necesitas contraseña del ID de cuenta.
 
-- Creación y administración de recintos.
-- Creación y administración de eventos.
-- Categorías de eventos.
-- Estados del ciclo de vida de un evento.
-- Gestión de categorías de tickets.
-- Control de capacidad.
-- Reserva y liberación de aforo.
-- Consulta de eventos propios del organizador.
-- Control de concurrencia en operaciones de aforo.
-- Integración con mensajería mediante SQS.
-
-### Categorías de eventos
-
-```text
-CONCERT
-FESTIVAL
-THEATER
-SPORTS
-CONFERENCE
-COMEDY
-OTHER
+```powershell
+# AWS Details -> AWS CLI: introduce los tres valores actuales en entradas ocultas.
+./infra/aws/connect-learner-lab.ps1
+# Actualiza también los Secrets temporales de GitHub y habilita despliegue:
+./infra/aws/configure-github-lab.ps1 -EnableDeployment
 ```
 
-### Estados
+Se necesita Docker Desktop listo. El asistente usa la imagen oficial AWS CLI, cifra la sesión con el usuario de Windows y comprueba identidad y acceso real a ECS. STS por sí solo no demuestra permisos. Si aparece `voc-cancel-cred`, inicia el laboratorio y renueva los tres valores actuales; no cambies políticas IAM para saltar esa restricción. Renovar el PC no renueva GitHub: ejecuta ambos comandos. Sin `-EnableDeployment`, el segundo deja la publicación deshabilitada.
 
-```text
-DRAFT
-PUBLISHED
-PAUSED
-CANCELLED
-COMPLETED
+### Recursos y límites
+
+- VPC propia, dos zonas, subredes públicas, privadas de aplicación y privadas de datos. ECS sin IP pública; ALB interno; entrada por VPC Link. NAT único para salida de aplicación; datos sin ruta por defecto a Internet. Endpoints S3/DynamoDB.
+- Aurora PostgreSQL 17.11: tres bases y usuarios separados en un clúster/instancia compartidos; acceso cruzado rechazado. TLS con validación de certificado. Redis 7.1 con contraseña, TLS y cifrado en reposo. Tickets en DynamoDB con escritura transaccional y uso condicional único.
+- Cuatro servicios ECS Fargate, 512 CPU/1 GiB por tarea, imágenes por digest, health checks, actualización progresiva y circuit breaker de despliegue con rollback.
+- Cinco colas SQS; compras con visibilidad 120 s, cinco entregas y DLQ retenida 14 días. Lambda de compras de imagen; vínculo BatchSize 1. Imagen Java separada para el autorizador.
+- CloudWatch: logs retenidos siete días, panel `eventpass-lab`, nueve alarmas operativas. Sin avisos SNS ni acciones externas. Las alarmas de target tracking pueden añadirse aparte.
+- Eventos: target tracking CPU 60%, mínimo 1/máximo 2 tareas, espera de subida 60 s y bajada 180 s. `start-lab-scaling.ps1` configura y verifica la política. Una política existente no acredita que ya se observó una transición automática bajo carga.
+- `LabRole` compartido es una restricción del laboratorio; los roles de EventPass no son roles IAM. El autoescalador usa el rol vinculado al servicio administrado por AWS. No se modifican permisos de `LabRole`.
+- No hay alta disponibilidad completa: un NAT, un writer SQL y un Redis. No hay dominio propio ni pasarela de pago real. Cloud Map no fue autorizado; las llamadas internas usan listeners privados del ALB.
+
+### Aprovisionamiento y verificaciones
+
+El laboratorio actual ya está desplegado. No vuelvas a crearlo para cada commit. Orden de preparación inicial, cuando los recursos todavía no existen:
+
+```powershell
+./infra/aws/initialize-lab.ps1
+./infra/aws/start-lab-network.ps1 -Apply
+./infra/aws/start-lab-data.ps1 -Apply
+./infra/aws/initialize-lab-data.ps1
+./infra/aws/start-lab-services.ps1
+./infra/aws/start-lab-purchase.ps1
+./infra/aws/start-lab-authorizer.ps1
+./infra/aws/start-lab-network.ps1 -Apply
+./infra/aws/start-lab-monitoring.ps1 -Apply
+./infra/aws/start-lab-scaling.ps1
 ```
 
-### Persistencia
+Los comandos de red/datos/monitoreo sin `-Apply` preparan un change set; rechazan eliminaciones y reemplazos. La inicialización SQL comprueba TLS, aislamiento de usuarios y Redis sin conservar datos de prueba. Las publicaciones manuales exigen un commit identificado y no deben superponerse al pipeline. El pipeline reconcilia una sala preparada: no es un instalador completo desde una cuenta vacía.
 
-```text
-PostgreSQL
-    │
-    └── eventpass_events
+```powershell
+./infra/aws/Sync-LabServiceState.ps1
+./infra/aws/test-lab-network.ps1 -ServicesReady
+./infra/aws/test-lab-services.ps1
+./infra/aws/test-lab-purchase.ps1
+./infra/aws/test-lab-security.ps1
+./infra/aws/start-lab-scaling.ps1 -VerifyOnly
 ```
 
----
+`Sync` solo actualiza informes locales. Las demás pruebas validan red, sesiones, roles, propiedad, compra, aforo y tickets; crean datos identificables de prueba. No hacen cobros reales. El Gateway público se obtiene del output `GatewayUrl` de `eventpass-network`; en Postman usa esa base con las mismas rutas públicas de Swagger. El panel Swagger local apunta a Floci, no a AWS. No presentes sus respuestas como evidencia de nube.
 
-## 🛒 ms-orders
+### CI/CD y trazabilidad
 
-Responsable del ciclo de vida de las órdenes de compra.
+Push a `develop` dispara `.github/workflows/tests.yml`: pruebas de microservicios afectados, plataforma E2E, Gateway privado Floci, compra asíncrona y DLQ, perfiles de producción/Flyway, DynamoDB y Swarm con carga. Una falla bloquea publicación. Después, si `AWS_DEPLOY_ENABLED=true` y la sesión está vigente, se ejecuta `deploy-aws.yml` en `aws-lab`.
 
-### Funcionalidades
+El despliegue verifica cuenta/recursos/commit, reconcilia colas/red/datos, ejecuta bootstrap, construye y publica imágenes con commit y digest, actualiza ECS y Lambda, publica el autorizador Java, conecta las rutas y configura monitoreo/autoescalado. Finalmente ejecuta pruebas reales de sesiones, roles, compras, tickets y aislamiento JWT. Confirma que ECS conserva la nueva revisión: un rollback a la anterior falla la comprobación.
 
-- Creación de órdenes.
-- Validación de información de compra.
-- Reserva de capacidad.
-- Gestión de estados de órdenes.
-- Procesamiento de pagos.
-- Cancelación de órdenes.
-- Liberación de capacidad.
-- Consulta de órdenes del usuario.
-- Publicación de eventos de negocio mediante SQS.
+GitHub usa Secrets temporales `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_SESSION_TOKEN` y variables `AWS_TASK_CONFIG`, `AWS_DEPLOY_CONFIG`, `AWS_DEPLOY_ENABLED`. Los JSON contienen referencias ARN, no contraseñas. Un fallo de pruebas posteriores marca el job fallido; no revierte automáticamente todos los componentes como una transacción. Cambios de esquema y contratos deben permitir convivencia entre versiones.
 
-### Flujo principal
+## 6. Resiliencia y recuperación de compras
 
-```text
-Crear orden
-     │
-     ▼
-Validar información
-     │
-     ▼
-Reservar capacidad
-     │
-     ▼
-Crear orden PENDING
-     │
-     ▼
-Procesar pago
-     │
-     ▼
-Orden completada
-     │
-     ▼
-Publicar OrderCompletedEvent
+Órdenes protege sus llamadas REST a Auth y Eventos con circuitos independientes Resilience4j. Ventana 10, mínimo 5 llamadas, apertura al 50% de fallos, espera 15 s y dos sondas de recuperación. Conexión limitada a 2 s y lectura a 4 s. Red, HTTP 5xx y 429 cuentan como fallos; 400/401/403/404/409 no indican caída y no abren el circuito. Circuito abierto o dependencia caída devuelve 503 sin detalles internos ni éxito ficticio. No hay reintento HTTP automático de pagos o reservas.
+
+Lambda protege por separado Auth, Eventos, Tickets y Órdenes con ventana 10/mínimo 5/50%, espera 15 s y una sonda. Su estado es local al entorno Lambda caliente: no es un cortacircuitos distribuido. SQS controla los reintentos; se conservan las claves idempotentes de reserva, emisión y resultado. El autorizador siempre deniega si Auth/Redis fallan. Auth, Eventos y Tickets no necesitan circuitos HTTP salientes si no llaman a otro microservicio por HTTP. Los CB del diagrama deben representar estas dependencias; el circuit breaker de despliegue ECS es otro mecanismo.
+
+La DLQ permite recuperar un fallo persistente después de corregir la causa. Para prueba controlada sin otras compras activas: `./infra/aws/test-lab-purchase-dlq.ps1`. Inyecta un fallo restringido a una orden y restaura la imagen estable; no lo ejecutes durante compras ajenas ni un despliegue concurrente. Para una orden fallida concreta:
+
+```powershell
+./infra/aws/recover-lab-purchase.ps1 -OrderId '<UUID_DE_LA_ORDEN>'
 ```
 
-### Persistencia
+Comprueba luego orden, aforo y tickets. No publiques de nuevo todas las compras ni borres la cola. La alarma DLQ se prueba con `./infra/aws/test-lab-monitoring.ps1`: introduce una sonda técnica, comprueba OK -> ALARM -> OK y la retira. Puede tardar varios minutos; es diferente de una compra real.
 
-```text
-PostgreSQL
-    │
-    └── eventpass_orders
+En Floci, `./infra/purchase-lambda/recover-local-purchases.ps1 -Confirm` devuelve toda la DLQ local. Para acelerar la prueba aislada: arranca con `-VisibilityTimeout 25 -MaxReceiveCount 2`, activa `E2E_INTERRUPT_TICKETS=true`, `E2E_PURCHASE_DLQ=true` y ejecuta la prueba de compra. Restaura después los valores habituales.
+
+## 7. Pruebas repetibles
+
+```powershell
+# Unitarias/integración de cada servicio (Testcontainers requiere Docker):
+./ms-orders/mvnw.cmd -f ms-orders/pom.xml test
+# Pruebas de Lambda y automatización:
+node --test infra/purchase-lambda/*.test.mjs
+node --test infra/aws/*.test.mjs
+# E2E del entorno levantado; usa credenciales de prueba de ese entorno:
+$env:AUTH_BASE_URL = 'http://127.0.0.1:18081'
+$env:EVENTS_BASE_URL = 'http://127.0.0.1:18082'
+$env:ORDERS_BASE_URL = 'http://127.0.0.1:18083'
+$env:TICKETS_BASE_URL = 'http://127.0.0.1:18084'
+./ms-auth/mvnw.cmd -f e2e-tests/pom.xml verify
 ```
 
----
-
-## 🎟️ ms-tickets
-
-Responsable de la emisión y validación de entradas.
-
-A diferencia de los demás servicios, utiliza MongoDB debido a la naturaleza documental de la información asociada a los tickets.
-
-### Funcionalidades
-
-- Consumo de eventos de órdenes completadas.
-- Generación de tickets.
-- Persistencia de tickets.
-- Generación de códigos únicos.
-- Estados de tickets.
-- Validación de tickets.
-- Marcado de tickets como utilizados.
-- Prevención de duplicados.
-- Actualizaciones atómicas para operaciones concurrentes.
-
-### Flujo
-
-```text
-OrderCompletedEvent
-        │
-        ▼
-       SQS
-        │
-        ▼
-OrderCompletedEventConsumer
-        │
-        ▼
-TicketService
-        │
-        ▼
-Generación de tickets
-        │
-        ▼
-     MongoDB
-```
-
-### Estados
-
-```text
-ACTIVE
-USED
-```
-
-### Persistencia
-
-```text
-MongoDB
-    │
-    └── eventpass_tickets
-```
-
----
-
-# 📨 Comunicación asíncrona
-
-EventPass utiliza **AWS SQS** para desacoplar el procesamiento de órdenes y la emisión de tickets.
-
-El flujo principal es:
-
-```text
-ms-orders
-    │
-    │ OrderCompletedEvent
-    ▼
-SQS
-    │
-    ▼
-ms-tickets
-    │
-    ▼
-MongoDB
-```
-
-Esto permite que `ms-orders` no tenga que esperar a que `ms-tickets` termine de generar las entradas.
-
-## LocalStack
-
-Durante el desarrollo local se utiliza **LocalStack** para simular los servicios de AWS.
-
-```text
-Desarrollo local:
-
-ms-orders
-    │
-    ▼
-LocalStack
-    │
-    ▼
-SQS simulado
-    │
-    ▼
-ms-tickets
-```
-
-LocalStack es exclusivamente parte de la infraestructura de desarrollo local. En un entorno AWS real, esta simulación se reemplaza por los servicios administrados de AWS.
-
----
-
-# 🗄️ Infraestructura local
-
-Docker Compose permite levantar toda la plataforma junto con sus dependencias.
-
-```text
-┌───────────────────────────────────────────────┐
-│                Docker Compose                 │
-│                                               │
-│  ┌─────────┐  ┌──────────┐  ┌─────────────┐ │
-│  │ ms-auth │  │ms-events │  │  ms-orders  │ │
-│  │  :8081  │  │  :8082   │  │    :8083   │ │
-│  └────┬────┘  └────┬─────┘  └──────┬──────┘ │
-│       │             │               │        │
-│  PostgreSQL    PostgreSQL      PostgreSQL    │
-│                                               │
-│  ┌────────────┐  ┌─────────┐  ┌───────────┐ │
-│  │ ms-tickets │  │  Redis  │  │  MongoDB  │ │
-│  │   :8084    │  │  :6379  │  │  :27018   │ │
-│  └─────┬──────┘  └─────────┘  └───────────┘ │
-│        │                                      │
-│     LocalStack :4566                          │
-│                                               │
-└───────────────────────────────────────────────┘
-```
-
-### Servicios de infraestructura
-
-| Servicio | Puerto local | Propósito |
-|---|---:|---|
-| `ms-auth` | `8081` | Autenticación y usuarios |
-| `ms-events` | `8082` | Eventos y aforo |
-| `ms-orders` | `8083` | Órdenes |
-| `ms-tickets` | `8084` | Tickets |
-| PostgreSQL Auth | `5432` | Base de datos de `ms-auth` |
-| PostgreSQL Events | `5433` | Base de datos de `ms-events` |
-| PostgreSQL Orders | `5434` | Base de datos de `ms-orders` |
-| MongoDB Tickets | `27018` | Base de datos de `ms-tickets` |
-| Redis | `6379` | Sesiones y cache |
-| LocalStack | `4566` | Servicios AWS simulados |
-
----
-
-# 🚀 Ejecución local
-
-## Requisitos
-
-- Docker
-- Docker Compose
-- Git
-
-No es necesario instalar PostgreSQL, MongoDB, Redis o LocalStack directamente en el sistema para ejecutar la plataforma mediante Docker Compose.
-
----
-
-## 1. Clonar el repositorio
-
-```bash
-git clone https://github.com/BenjaLizama/eventpass-backend
-cd eventpass-backend
-```
-
----
-
-## 2. Configurar variables de entorno
-
-Crear el archivo `.env` en la raíz del proyecto.
-
-Las variables principales corresponden a:
-
-```env
-SPRING_PROFILES_ACTIVE=dev
-
-JWT_SECRET=<secret>
-
-AWS_REGION=us-east-1
-AWS_ACCESS_KEY_ID=test
-AWS_SECRET_ACCESS_KEY=test
-
-POSTGRES_AUTH_DB=eventpass_auth
-POSTGRES_AUTH_USER=postgres
-POSTGRES_AUTH_PASSWORD=<password>
-POSTGRES_AUTH_PORT=5432
-
-POSTGRES_EVENTS_DB=eventpass_events
-POSTGRES_EVENTS_USER=postgres
-POSTGRES_EVENTS_PASSWORD=<password>
-POSTGRES_EVENTS_PORT=5433
-
-POSTGRES_ORDERS_DB=eventpass_orders
-POSTGRES_ORDERS_USER=postgres
-POSTGRES_ORDERS_PASSWORD=<password>
-POSTGRES_ORDERS_PORT=5434
-
-REDIS_PORT=6379
-LOCALSTACK_PORT=4566
-
-MONGODB_TICKETS_PORT=27018
-MONGODB_TICKETS_DATABASE=eventpass_tickets
-```
-
-> Los valores sensibles no deben almacenarse directamente en el repositorio.
-
----
-
-## 3. Levantar la plataforma
-
-Desde la raíz:
-
-```bash
-docker compose up --build
-```
-
-Para ejecutarlo en segundo plano:
-
-```bash
-docker compose up --build -d
-```
-
-Docker Compose se encargará de:
-
-1. Crear la red interna.
-2. Crear los contenedores.
-3. Levantar PostgreSQL.
-4. Levantar MongoDB.
-5. Levantar Redis.
-6. Levantar LocalStack.
-7. Inicializar los recursos AWS locales necesarios.
-8. Construir los microservicios.
-9. Esperar las dependencias mediante health checks.
-10. Levantar los cuatro microservicios.
-
----
-
-## 4. Verificar los contenedores
-
-```bash
-docker compose ps
-```
-
-Para revisar los logs:
-
-```bash
-docker compose logs -f
-```
-
-O individualmente:
-
-```bash
-docker compose logs -f ms-auth
-docker compose logs -f ms-events
-docker compose logs -f ms-orders
-docker compose logs -f ms-tickets
-```
-
----
-
-## 5. Detener la plataforma
-
-Para detener los contenedores:
-
-```bash
-docker compose down
-```
-
-Este comando mantiene los volúmenes y, por lo tanto, los datos persistidos.
-
-Para realizar una limpieza completa:
-
-```bash
-docker compose down -v --remove-orphans
-```
-
-> `-v` elimina los volúmenes de Docker y, por lo tanto, también elimina los datos almacenados en las bases de datos.
-
----
-
-# 🧰 Scripts de desarrollo
-
-El directorio `scripts/` contiene scripts utilizados para inicializar recursos necesarios para el entorno local.
-
-Su principal objetivo es preparar los recursos simulados de AWS utilizados por LocalStack, como las colas SQS.
-
-El flujo general es:
-
-```text
-docker compose
-       │
-       ▼
-  LocalStack
-       │
-       ▼
- scripts de inicialización
-       │
-       ▼
-Recursos AWS locales
-       │
-       ▼
-ms-orders / ms-tickets
-```
-
-Estos scripts forman parte del entorno de desarrollo local y no reemplazan la infraestructura AWS utilizada en un entorno real.
-
----
-
-# 🔐 Seguridad
-
-EventPass utiliza Spring Security y JWT para proteger las APIs.
-
-El flujo general es:
-
-```text
-Cliente
-   │
-   │ Authorization: Bearer <JWT>
-   ▼
-Spring Security
-   │
-   ▼
-JwtAuthenticationFilter
-   │
-   ├── Validación de firma
-   ├── Validación de expiración
-   ├── Validación de sesión
-   ├── Validación de blacklist
-   └── Extracción de authorities
-   │
-   ▼
-Endpoint protegido
-```
-
-Los permisos se gestionan mediante RBAC.
-
-### Roles principales
-
-```text
-ADMIN
-STAFF
-ORGANIZER
-SUPPORT
-CUSTOMER
-```
-
----
-
-# 📚 Documentación de las APIs
-
-Cada microservicio incluye documentación mediante **OpenAPI / Swagger UI**.
-
-### Swagger
-
-| Servicio | Swagger UI |
-|---|---|
-| `ms-auth` | `http://localhost:8081/swagger-ui.html` |
-| `ms-events` | `http://localhost:8082/swagger-ui.html` |
-| `ms-orders` | `http://localhost:8083/swagger-ui.html` |
-| `ms-tickets` | `http://localhost:8084/swagger-ui.html` |
-
-### OpenAPI
-
-Los documentos OpenAPI están disponibles mediante:
-
-```text
-/v3/api-docs
-```
-
-Por ejemplo:
-
-```text
-http://localhost:8081/v3/api-docs
-```
-
----
-
-# ❤️ Health Checks
-
-Los microservicios exponen endpoints de salud mediante Spring Boot Actuator.
-
-Ejemplo:
-
-```text
-http://localhost:8081/actuator/health
-```
-
-También están configurados health checks en Docker Compose para controlar la disponibilidad de las dependencias antes de iniciar los servicios que dependen de ellas.
-
----
-
-# 🧪 Pruebas
-
-Cada microservicio posee su propio proyecto Maven.
-
-Para ejecutar las pruebas de un servicio:
-
-```bash
-cd ms-auth
-./mvnw test
-```
-
-También se puede ejecutar:
-
-```bash
-cd ms-events
-./mvnw test
-```
-
-```bash
-cd ms-orders
-./mvnw test
-```
-
-```bash
-cd ms-tickets
-./mvnw test
-```
-
----
-
-# 📁 Estructura del repositorio
-
-```text
-eventpass-backend/
-│
-├── ms-auth/
-│   ├── src/
-│   ├── pom.xml
-│   └── Dockerfile
-│
-├── ms-events/
-│   ├── src/
-│   ├── pom.xml
-│   └── Dockerfile
-│
-├── ms-orders/
-│   ├── src/
-│   ├── pom.xml
-│   └── Dockerfile
-│
-├── ms-tickets/
-│   ├── src/
-│   ├── pom.xml
-│   └── Dockerfile
-│
-├── scripts/
-│   └── # Scripts de inicialización del entorno local
-│
-├── .github/
-│   └── workflows/
-│
-├── docker-compose.yml
-├── .env
-├── .gitignore
-└── README.md
-```
-
-Dentro de cada microservicio se mantiene una estructura orientada a responsabilidades:
-
-```text
-src/main/java/
-└── cl/eventpass/
-    └── ms-*/
-        ├── controller/
-        ├── service/
-        ├── repository/
-        ├── entity/
-        ├── dto/
-        ├── mapper/
-        ├── security/
-        ├── config/
-        ├── exception/
-        └── ...
-```
-
----
-
-# 🛠️ Stack tecnológico
-
-| Tecnología | Uso |
-|---|---|
-| Java 21 | Lenguaje principal |
-| Spring Boot | Framework de microservicios |
-| Spring Security | Seguridad y autorización |
-| JWT | Autenticación stateless |
-| PostgreSQL | Persistencia de auth, eventos y órdenes |
-| MongoDB | Persistencia de tickets |
-| Redis | Sesiones y blacklist |
-| AWS SQS | Comunicación asíncrona |
-| LocalStack | Simulación local de AWS |
-| Spring Data JPA | Acceso a PostgreSQL |
-| Spring Data MongoDB | Acceso a MongoDB |
-| Springdoc OpenAPI | Documentación de APIs |
-| Spring Boot Actuator | Health checks y monitoreo |
-| Docker | Contenerización |
-| Docker Compose | Orquestación local |
-| Maven | Gestión y construcción de proyectos |
-| Lombok | Reducción de código repetitivo |
-
----
-
-# 🔄 Flujo completo del sistema
-
-El flujo principal de negocio puede resumirse de la siguiente manera:
-
-```text
-                 ┌─────────────┐
-                 │   Cliente   │
-                 └──────┬──────┘
-                        │
-                        ▼
-                 ┌─────────────┐
-                 │   ms-auth   │
-                 └─────────────┘
-                        │
-                     JWT │
-                        ▼
-                 ┌─────────────┐
-                 │  ms-events  │
-                 └─────────────┘
-                        │
-                  Disponibilidad
-                        │
-                        ▼
-                 ┌─────────────┐
-                 │  ms-orders  │
-                 └──────┬──────┘
-                        │
-                  Orden completada
-                        │
-                        ▼
-                 ┌─────────────┐
-                 │     SQS     │
-                 └──────┬──────┘
-                        │
-                        ▼
-                 ┌─────────────┐
-                 │ ms-tickets  │
-                 └──────┬──────┘
-                        │
-                        ▼
-                     MongoDB
-```
-
-La separación permite que la emisión de tickets se procese de forma independiente de la operación de compra.
-
----
-
-# 📌 Estado del proyecto
-
-EventPass cuenta actualmente con:
-
-- Arquitectura basada en microservicios.
-- Separación de dominios.
-- Database per Service.
-- Autenticación y autorización mediante JWT.
-- RBAC.
-- Sesiones y blacklist mediante Redis.
-- Gestión de eventos y recintos.
-- Control de capacidad y concurrencia.
-- Gestión de órdenes.
-- Procesamiento de pagos.
-- Comunicación asíncrona mediante SQS.
-- Emisión y validación de tickets.
-- PostgreSQL y MongoDB.
-- Docker Compose.
-- LocalStack para desarrollo local.
-- Configuración diferenciada para desarrollo y producción.
-- OpenAPI / Swagger.
-- Health checks mediante Actuator.
-- Configuración mediante variables de entorno.
+Para Floci los cuatro `*_BASE_URL` valen `http://127.0.0.1:8090`, `E2E_ASYNC_PURCHASE=true`; ejecuta `'-Dit.test=*,!PlatformHealthIT,!OrderItemCapacityIT'`. Health y operaciones internas se comprueban por acceso directo, no deben publicarse en Gateway. Las E2E usan `E2E_ADMIN_EMAIL`, `E2E_ADMIN_PASSWORD` y, cuando se prueban rutas internas, `MS_ORDERS_CLIENT_ID`/`MS_ORDERS_CLIENT_SECRET` del entorno. Usa una terminal separada para no mezclar variables entre modos.
+
+Los perfiles `prod` se prueban desde bases vacías con `infra/database/compose.verify.yaml`; para Tickets añade `compose.dynamodb.yaml` e inicializa la tabla con `tickets-table.json`. El pipeline contiene los comandos completos y verifica idempotencia y doble uso concurrente. No actives Flyway sobre una base histórica sin revisar un baseline: `dev` y `prod` no son migraciones automáticas entre sí.
+
+Informes en `.local/`: red, datos, servicios, compras, DLQ, monitoreo, JWT y escalado; Swarm en `.local/swarm/`. Son evidencia técnica local, no sustituyen una ejecución actual ni la presentación. GitHub conserva logs y el artefacto Swarm con los resultados de carga.
+
+## 8. Pauta EP3 y video
+
+| Indicadores | Evidencia a mostrar |
+| --- | --- |
+| IE1 (10%), IE2 (5%) | Dockerfile multietapa, usuario no root, build/arranque local y endpoints de los cuatro servicios. |
+| IE3 (5%), IE7 (10%) | `docker-stack.yml`, manager/worker Ready, stack desplegado y servicios distribuidos. |
+| IE4 (10%), IE5 (10%), IE6 (5%) | Commit/push -> build/test -> configuración cloud -> publicación -> microservicio accesible por Gateway. |
+| IE8 (5%), IE9 (5%) | Escalado Swarm 1 -> 2 -> 1 con tráfico, resultados y explicación de overlay, datos, disponibilidad y mantenimiento. |
+| IE10 (10%), IE13 (5%) | Código/Dockerfile de Lambda, disparador SQS y ejecución conectada a servicios. |
+| IE11 (6%), IE14 (2%) | Creación/configuración de la cola cloud, productor Órdenes y consumidor Lambda con una compra identificable. |
+| IE12 (4%) | Gateway, VPC Link, ALB privado, JWT/roles, denegación y ausencia de rutas internas. |
+| IE15 (3%) | Compra completa, ticket, aforo agotado/devolución simulada y relación con prueba de escalabilidad. |
+| IE16 (3%), IE17 (2%) | Video ordenado, lenguaje técnico, voces de ambos estudiantes y audio claro. |
+
+La pauta pide **video de 3 a 8 minutos**, MP4 o similar, realizado en pareja; no exige mostrar el rostro. Entrega los enlaces al código y el video en AVA y copia al correo del docente según su plazo. No envíes correo automáticamente desde herramientas de desarrollo. Las guías incluyen alternativas: no se exige agregar simultáneamente Kubernetes, CodePipeline, ELK y Prometheus para repetir lo que ya resuelven las herramientas elegidas.
+
+Guion sugerido de 7:30, repartiendo narración y demostraciones entre ambos:
+
+| Tiempo | Pantalla y acción |
+| --- | --- |
+| 0:00–0:35 | Presentar EventPass y recorrido de la arquitectura. |
+| 0:35–1:30 | Dockerfile, build, contenedores y endpoints locales. |
+| 1:30–2:30 | Swarm: nodos, stack, carga y cambio de réplicas. |
+| 2:30–3:30 | Commit/push y pipeline; mostrar el mismo SHA en el despliegue y endpoint AWS funcional. |
+| 3:30–4:20 | Gateway privado: petición permitida, cliente rechazado y ruta interna 404. |
+| 4:20–6:30 | SQS configurada, compra pendiente, Lambda, ticket, uso STAFF y segunda compra sin aforo. |
+| 6:30–7:30 | CloudWatch, resiliencia, límites del laboratorio y cierre. |
+
+Graba las esperas largas y edítalas conservando continuidad del mismo commit/orden. No leas JSON completo: señala estado, ID, rol, código HTTP y resultado de negocio. Antes de grabar, renueva credenciales, comprueba salud/colas, prepara eventos futuros y cuentas de prueba y realiza un ensayo completo. La configuración de autoescalado CPU se muestra como configuración hasta que su historial registre una transición real por carga; no confundirla con el escalado manual demostrado en Swarm.
+
+Referencias de implementación: [circuit breaker Resilience4j](https://resilience4j.readme.io/docs/circuitbreaker), [escalado de servicios ECS](https://docs.aws.amazon.com/AmazonECS/latest/developerguide/service-auto-scaling.html). Las instrucciones de entrega corresponden a la pauta EP3 JVY0101 compartida por el docente; no se incorporan sus documentos privados al repositorio.

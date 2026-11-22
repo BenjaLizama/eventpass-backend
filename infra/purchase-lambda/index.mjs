@@ -1,4 +1,6 @@
 import { processOrder } from './process-order.mjs';
+import { createDependencyCall } from './dependency-call.mjs';
+const call = createDependencyCall();
 
 async function readSecret(arn) {
   // AWS supplies SDK v3 and the credentials of the Lambda execution role.
@@ -17,20 +19,6 @@ export async function resolveClientSecret(environment, read = readSecret) {
   }
   if (!environment.MS_ORDERS_CLIENT_SECRET) throw new Error('Falta el secreto del cliente interno.');
   return environment.MS_ORDERS_CLIENT_SECRET;
-}
-
-async function call(service, path, method, body, token) {
-  const response = await fetch(service.replace(/\/+$/, '') + path, {
-    method,
-    headers: {
-      'Content-Type': 'application/json',
-      ...(token && { Authorization: 'Bearer ' + token })
-    },
-    body: JSON.stringify(body),
-    signal: AbortSignal.timeout(4000)
-  });
-  if (!response.ok) throw new Error(method + ' ' + path + ' devolvió HTTP ' + response.status);
-  if (response.status !== 204) return (await response.json()).data;
 }
 
 export async function handler(event) {

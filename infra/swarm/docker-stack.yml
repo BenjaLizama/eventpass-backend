@@ -4,6 +4,7 @@ version: '3.8'
 # env_file se lee explícitamente; docker stack deploy no carga .env por sí solo.
 x-app: &app
   env_file: .env
+  stop_grace_period: 45s
   networks: [eventpass]
   deploy: &app-deploy
     replicas: 1
@@ -101,6 +102,8 @@ services:
     image: eventpass/ms-events:ep3
     environment:
       EVENTS_DB_URL: jdbc:postgresql://postgres-events:5432/eventpass_events
+      SERVER_SHUTDOWN: graceful
+      SPRING_LIFECYCLE_TIMEOUT_PER_SHUTDOWN_PHASE: 30s
     ports: ['18082:8082']
     healthcheck:
       <<: *app-health

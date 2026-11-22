@@ -85,7 +85,7 @@ COMMIT;
     }
     elseif ($existing.StatusCode -ne 404) { throw "Lambda respondió HTTP $($existing.StatusCode)." }
 
-    Compress-Archive -LiteralPath @((Join-Path $PSScriptRoot 'index.mjs'), (Join-Path $PSScriptRoot 'process-order.mjs')) -DestinationPath $archive
+    Compress-Archive -LiteralPath @((Join-Path $PSScriptRoot 'index.mjs'), (Join-Path $PSScriptRoot 'process-order.mjs'), (Join-Path $PSScriptRoot 'dependency-call.mjs')) -DestinationPath $archive
     $null = Send-Json $functions @{
         FunctionName = $name; Runtime = 'nodejs22.x'; Handler = 'index.handler'; Timeout = 20
         Role = 'arn:aws:iam::000000000000:role/eventpass-local'

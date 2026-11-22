@@ -378,12 +378,18 @@ jobs:
           ./ms-auth/mvnw -B -f e2e-tests/pom.xml
           '-Dit.test=PlatformHealthIT,SecurityBoundariesIT,OrganizerOwnershipIT,EventPassPurchaseFlowIT,OrderCancellationRestoresCapacityIT,TicketAccessControlIT'
           verify
-      - name: Save Swarm verification
+      - name: Verify Swarm scaling under concurrent read load
+        # Load is read-only and bounded; it also checks continuity while scaling in/out.
         if: success()
+        run: node infra/swarm/test-scaling.mjs
+      - name: Save Swarm evidence
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: swarm-verification
-          path: .local/swarm/verification.json
+          path: |
+            .local/swarm/verification.json
+            .local/swarm/scaling-load.json
       - name: Stop isolated Swarm nodes
         if: always()
         run: docker compose -p eventpass-swarm-lab -f infra/swarm/compose.lab.yaml down

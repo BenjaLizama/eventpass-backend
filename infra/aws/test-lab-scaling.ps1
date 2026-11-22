@@ -4,7 +4,7 @@ param(
     [ValidateRange(180,900)][int] $LoadSeconds = 900,
     [ValidateRange(1,45)][int] $RequestsPerSecond = 45,
     [ValidateRange(1,50)][int] $EventCount = 48,
-    [ValidateRange(300,1800)][int] $ScaleInWaitSeconds = 1500,
+    [ValidateRange(300,1800)][int] $ScaleInWaitSeconds = 1800,
     [string] $AwsScript = (Join-Path $PSScriptRoot 'Invoke-LabAws.ps1')
 )
 $ErrorActionPreference = 'Stop'
@@ -31,7 +31,7 @@ function Snapshot {
         throw 'Existe un despliegue concurrente: no se atribuirá a autoescalado.'
     }
     $activities = (Invoke-ScalingProbeAws @('application-autoscaling','describe-scaling-activities',
-        '--service-namespace','ecs','--resource-id','service/eventpass/eventpass-ms-events','--max-results','30')).ScalingActivities
+        '--service-namespace','ecs','--resource-id','service/eventpass/eventpass-ms-events','--include-not-scaled-activities','--max-results','30')).ScalingActivities
     $automatic = @($activities | Where-Object {
         $_.StatusCode -eq 'Successful' -and [DateTimeOffset]$_.StartTime -ge $started -and
         $_.Cause -like '*eventpass-events-cpu*'
@@ -41,7 +41,8 @@ function Snapshot {
     $catalog=Invoke-RestMethod "$gateway/api/v1/events?page=0&size=1" -TimeoutSec 10 -MaximumRedirection 0
     if ($catalog.status -ne 200) { throw 'El catálogo no respondió correctamente durante la observación del escalado.' }
     $sample = @{ At=[DateTimeOffset]::UtcNow.ToString('o'); Desired=$service.desiredCount;
-        Running=$service.runningCount; Pending=$service.pendingCount; HealthyTargets=$healthy; CatalogStatus=200; Activities=$automatic }
+        Running=$service.runningCount; Pending=$service.pendingCount; HealthyTargets=$healthy; CatalogStatus=200; Activities=$automatic;
+        Decisions=@($activities | Where-Object { [DateTimeOffset]$_.StartTime -ge $started -and $_.NotScaledReasons }) }
     $samples.Add($sample)
     Save-Report
     Write-Host "Eventos: deseadas=$($sample.Desired), ejecutándose=$($sample.Running), pendientes=$($sample.Pending)."

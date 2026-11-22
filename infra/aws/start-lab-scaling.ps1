@@ -36,7 +36,14 @@ if ($t.Count -ne 1 -or $t[0].MinCapacity -ne 1 -or $t[0].MaxCapacity -ne 2 -or
 }
 $local = Join-Path $PSScriptRoot '../../.local'
 New-Item -ItemType Directory -Force $local | Out-Null
+$history = Invoke-ScalingAws -Arguments @('application-autoscaling','describe-scaling-activities',
+    '--service-namespace','ecs','--resource-id',$resource,'--max-results','50')
+$observed = @($history.ScalingActivities | Where-Object {
+    $_.StatusCode -eq 'Successful' -and $_.Cause -like '*eventpass-events-cpu*' -and
+    $_.Description -match 'desired count to [12]\b'
+})
 @{ CheckedAt=[DateTimeOffset]::UtcNow.ToString('o'); Resource=$resource; Min=1; Max=2;
-    CpuTargetPercent=60; Configured=$true; AutomaticTransitionObserved=$false; PolicyArn=$p[0].PolicyARN } |
+    CpuTargetPercent=60; Configured=$true; AutomaticTransitionObserved=($observed.Count -gt 0);
+    AutomaticActivities=$observed; PolicyArn=$p[0].PolicyARN } |
     ConvertTo-Json -Depth 5 | Set-Content -LiteralPath (Join-Path $local 'aws-scaling-verification.json')
-Write-Host 'OK: Eventos tiene escalado automático por CPU al 60%, mínimo 1 y máximo 2. La configuración no demuestra por sí sola un escalado provocado por carga.'
+Write-Host "OK: Eventos, CPU 60%, mínimo 1/máximo 2. Actividades automáticas exitosas en el historial: $($observed.Count). La prueba de carga se acredita por separado en aws-scaling-smoke.json."

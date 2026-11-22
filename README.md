@@ -187,6 +187,8 @@ Los comandos de red/datos/monitoreo sin `-Apply` preparan un change set; rechaza
 ./infra/aws/start-lab-scaling.ps1 -VerifyOnly
 ```
 
+Para comprobar el autoescalado con tráfico real: `./infra/aws/test-lab-scaling.ps1`. Prepara 16 eventos identificables de prueba con 16 localidades cada uno, consulta el catálogo público a un máximo de 35 peticiones/s durante hasta diez minutos, y detiene la carga cuando AWS confirma dos tareas sanas y una actividad exitosa de la política. Luego espera hasta 25 minutos para comprobar la reducción automática a una tarea. Cancela sus eventos y cierra sesión al terminar. No cambia manualmente réplicas ni umbrales y no publica métricas artificiales. Si no se observa la transición, falla explícitamente. No superponer esta prueba con un despliegue u otras cargas. El informe `.local/aws-scaling-smoke.json` conserva los estados ECS, causas e historial de AWS, CPU y resultado de carga; no contiene claves ni tokens. Es una prueba manual de la sala, no una carga que deba ejecutarse en cada push.
+
 `Sync` solo actualiza informes locales. Las demás pruebas validan red, sesiones, roles, propiedad, compra, aforo y tickets; crean datos identificables de prueba. No hacen cobros reales. El Gateway público se obtiene del output `GatewayUrl` de `eventpass-network`; en Postman usa esa base con las mismas rutas públicas de Swagger. El panel Swagger local apunta a Floci, no a AWS. No presentes sus respuestas como evidencia de nube.
 
 ### CI/CD y trazabilidad

@@ -24,8 +24,8 @@ x-app: &app
   healthcheck: &app-health
     interval: 10s
     timeout: 5s
-    retries: 12
-    start_period: 60s
+    retries: 6
+    start_period: 180s
 
 x-data: &data
   networks: [eventpass]
@@ -104,6 +104,8 @@ services:
       EVENTS_DB_URL: jdbc:postgresql://postgres-events:5432/eventpass_events
       SERVER_SHUTDOWN: graceful
       SPRING_LIFECYCLE_TIMEOUT_PER_SHUTDOWN_PHASE: 30s
+      SPRING_JPA_SHOW_SQL: 'false'
+      SPRING_JPA_PROPERTIES_HIBERNATE_FORMAT_SQL: 'false'
     ports: ['18082:8082']
     healthcheck:
       <<: *app-health

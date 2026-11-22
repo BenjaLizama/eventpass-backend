@@ -131,6 +131,8 @@ docker @swarm down
 
 `docker-stack.yml` usa imágenes construidas, `deploy`, red overlay, routing mesh y actualización start-first con rollback. Swarm no usa `build` ni `depends_on`. `env_file` carga explícitamente su configuración. Datos fijados al manager etiquetado; aplicaciones en el worker. No escales bases de datos con `service scale`: sus volúmenes locales no se replican. Swarm usa Docker-in-Docker privilegiado exclusivamente para esta práctica, sin montar el socket del PC ni publicar la API del motor.
 
+El health check concede hasta 180 s de inicialización antes de contabilizar fallos; una respuesta sana puede habilitar la tarea antes. Eventos desactiva el SQL de diagnóstico en esta práctica para no saturar logs bajo carga. La prueba espera tareas sanas y fin de la actualización antes de iniciar cada medición; no superpongas despliegues y escalado.
+
 Para dos máquinas Linux: `docker swarm init --advertise-addr <IP_PRIVADA_MANAGER>`, etiqueta el nodo con `docker node update --label-add eventpass-data=true <NODE_ID>` y obtén `docker swarm join-token worker`. Ejecuta el join en el segundo host. Entre nodos permite 2377/TCP, 7946/TCP+UDP y 4789/UDP; no desde Internet. Carga las mismas imágenes en ambos o usa ECR autenticado. Desde la carpeta del stack: `docker stack deploy --with-registry-auth -c docker-stack.yml eventpass`. Un manager y un worker no constituyen alta disponibilidad.
 
 ## 5. AWS Academy: conexión y despliegue

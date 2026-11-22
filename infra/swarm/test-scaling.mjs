@@ -38,15 +38,16 @@ async function load(label, concurrency, operation) {
     p95Ms: Number(latencies[Math.min(latencies.length - 1, Math.floor(latencies.length * 0.95))].toFixed(2)),
     maxMs: Number(latencies.at(-1).toFixed(2)) };
   console.log(JSON.stringify(result));
-  if (statuses[200] !== latencies.length) throw new Error('Hubo errores durante ' + label);
+  if (statuses[200] !== latencies.length) throw Object.assign(new Error('Hubo errores durante ' + label), { result });
   return result;
 }
 
 async function waitReplicas(count) {
-  const deadline = Date.now() + 240000;
+  const deadline = Date.now() + 420000;
   while (Date.now() < deadline) {
     const status = await docker('service', 'ls', '--filter', 'name=eventpass_ms-events', '--format', '{{.Replicas}}');
-    if (status === `${count}/${count}`) {
+    const update = await docker('service', 'inspect', 'eventpass_ms-events', '--format', '{{if .UpdateStatus}}{{.UpdateStatus.State}}{{end}}');
+    if (status === `${count}/${count}` && !['updating', 'rollback_started'].includes(update)) {
       // Running alone is insufficient: both replicas must have passed their Docker health check.
       const workerArgs = compose.map(x => x === 'manager' ? 'worker' : x);
       const ps = (await exec('docker', [...workerArgs, 'ps', '--filter', 'label=com.docker.swarm.service.name=eventpass_ms-events', '--format', '{{.Status}}'], { timeout: 30000 })).stdout.trim().split('\n');
@@ -62,8 +63,9 @@ report.connections = 'Independent HTTP connections; no retries. Persistent-conne
 let restore = false;
 mkdirSync('.local/swarm', { recursive: true });
 try {
-  const current = await docker('service', 'ls', '--filter', 'name=eventpass_ms-events', '--format', '{{.Replicas}}');
-  if (current !== '1/1') throw new Error('Primero ejecuta test-swarm.ps1: se requiere Eventos estable en 1/1.');
+  const current = await docker('service', 'inspect', 'eventpass_ms-events', '--format', '{{.Spec.Mode.Replicated.Replicas}}');
+  if (current !== '1') throw new Error('Primero ejecuta test-swarm.ps1: se requiere Eventos con una réplica.');
+  await waitReplicas(1);
   restore = true;
   report.phases.push(await load('baseline-one-replica', 2, () => delay(6000)));
   report.phases.push(await load('scale-out-under-load', 4, async () => {
@@ -74,6 +76,11 @@ try {
     await docker('service', 'scale', '--detach=true', 'eventpass_ms-events=1'); await waitReplicas(1);
   }));
   report.success = true;
+} catch (error) {
+  report.success = false;
+  report.error = error.message;
+  if (error.result) report.phases.push(error.result);
+  throw error;
 } finally {
   // Restore the known starting capacity even when a request fails.
   if (restore) {
